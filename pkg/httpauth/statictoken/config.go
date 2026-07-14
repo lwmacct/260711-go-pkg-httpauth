@@ -1,6 +1,7 @@
 package statictoken
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -23,6 +24,7 @@ func (c Config) Validate() (Config, error) {
 		return c, fmt.Errorf("%w: credentials are required", ErrInvalidConfig)
 	}
 	seen := make(map[string]struct{}, len(c.Credentials))
+	seenSecrets := make(map[[sha256.Size]byte]struct{}, len(c.Credentials))
 	for index := range c.Credentials {
 		credential := &c.Credentials[index]
 		credential.ID = strings.TrimSpace(credential.ID)
@@ -35,6 +37,11 @@ func (c Config) Validate() (Config, error) {
 			return c, fmt.Errorf("%w: duplicate credential ID", ErrInvalidConfig)
 		}
 		seen[credential.ID] = struct{}{}
+		digest := sha256.Sum256([]byte(credential.Secret))
+		if _, exists := seenSecrets[digest]; exists {
+			return c, fmt.Errorf("%w: duplicate credential secret", ErrInvalidConfig)
+		}
+		seenSecrets[digest] = struct{}{}
 	}
 	return c, nil
 }
