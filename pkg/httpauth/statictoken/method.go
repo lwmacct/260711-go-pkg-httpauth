@@ -30,8 +30,8 @@ type storedCredential struct {
 }
 
 type Generated struct {
-	Token        string
-	SecretSHA256 string
+	Token       string
+	TokenSHA256 string
 }
 
 func New(namespace string, config Config) (*Method, error) {
@@ -64,15 +64,15 @@ func Generate(namespace, id string) (Generated, error) {
 	if len(token) > MaxTokenBytes {
 		return Generated{}, fmt.Errorf("%w: token is too long", ErrInvalidConfig)
 	}
-	return Generated{Token: token, SecretSHA256: digestSecret(secret)}, nil
+	return Generated{Token: token, TokenSHA256: digestToken(token)}, nil
 }
 
 func Digest(namespace, token string) (string, error) {
-	_, secret, ok := parse(namespace, token)
+	_, ok := parse(namespace, token)
 	if !ok {
 		return "", fmt.Errorf("%w: token", ErrInvalidConfig)
 	}
-	return digestSecret(secret), nil
+	return digestToken(token), nil
 }
 
 func (m *Method) Info() httpauth.MethodInfo {
@@ -125,7 +125,7 @@ func (m *Method) ValidateSession(_ context.Context, session httpauth.Session) (h
 }
 
 func (m *Method) authenticate(token string) (storedCredential, bool) {
-	id, secret, ok := parse(m.namespace, token)
+	id, ok := parse(m.namespace, token)
 	if !ok {
 		return storedCredential{}, false
 	}
@@ -133,27 +133,27 @@ func (m *Method) authenticate(token string) (storedCredential, bool) {
 	if !exists {
 		return storedCredential{}, false
 	}
-	digest := sha256.Sum256(secret)
+	digest := sha256.Sum256([]byte(token))
 	return credential, subtle.ConstantTimeCompare(digest[:], credential.digest[:]) == 1
 }
 
-func parse(namespace, token string) (string, []byte, bool) {
+func parse(namespace, token string) (string, bool) {
 	if len(token) > MaxTokenBytes || token != strings.TrimSpace(token) {
-		return "", nil, false
+		return "", false
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 4 || parts[0] != namespace || parts[1] != tokenVersion || !validCredentialID(parts[2]) {
-		return "", nil, false
+		return "", false
 	}
 	secret, err := base64.RawURLEncoding.DecodeString(parts[3])
 	if err != nil || len(secret) != SecretBytes || base64.RawURLEncoding.EncodeToString(secret) != parts[3] {
-		return "", nil, false
+		return "", false
 	}
-	return parts[2], secret, true
+	return parts[2], true
 }
 
-func digestSecret(secret []byte) string {
-	digest := sha256.Sum256(secret)
+func digestToken(token string) string {
+	digest := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(digest[:])
 }
 

@@ -61,7 +61,7 @@ import (
 
 tokenMethod, err := statictoken.New("myapp", statictoken.Config{
 	Credentials: map[string]statictoken.Credential{
-		"admin": {Name: "Administrator", SecretSHA256: os.Getenv("API_ACCESS_TOKEN_SECRET_SHA256")},
+		"admin": {Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
 	},
 })
 if err != nil {
@@ -114,7 +114,7 @@ openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 插入首位，旧 Session 在旧 key 移除前继续有效。
 
 静态 token 使用 `<namespace>.10.<credential-id>.<secret>` 格式。namespace 由应用定义，
-secret 是 24 个随机字节的无填充 Base64URL 编码；配置只保存解码后 secret 的小写十六进制 SHA-256 摘要。
+secret 是 24 个随机字节的无填充 Base64URL 编码；配置只保存完整规范 token 的小写十六进制 SHA-256 摘要。
 可用 `statictoken.Generate("myapp", "admin")` 同时生成 token 和配置摘要。旧式任意字符串、
 UUID、错误版本、非规范 Base64URL 与带前后空白的 token 均不接受。
 

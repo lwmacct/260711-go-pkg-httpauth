@@ -20,8 +20,8 @@ const (
 var ErrInvalidConfig = errors.New("invalid static token config")
 
 type Credential struct {
-	Name         string `json:"name"          desc:"Display name"`
-	SecretSHA256 string `json:"secret-sha256" desc:"Lowercase hexadecimal SHA-256 digest of the decoded token secret"`
+	Name        string `json:"name"         desc:"Display name"`
+	TokenSHA256 string `json:"token-sha256" desc:"Lowercase hexadecimal SHA-256 digest of the complete access token"`
 }
 
 type Config struct {
@@ -51,8 +51,8 @@ func (c Config) validate() (map[string]validatedCredential, error) {
 		if !validCredentialID(id) || credential.Name == "" || credential.Name != strings.TrimSpace(credential.Name) {
 			return nil, fmt.Errorf("%w: credential %q", ErrInvalidConfig, id)
 		}
-		rawDigest, err := hex.DecodeString(credential.SecretSHA256)
-		if err != nil || len(rawDigest) != sha256.Size || hex.EncodeToString(rawDigest) != credential.SecretSHA256 {
+		rawDigest, err := hex.DecodeString(credential.TokenSHA256)
+		if err != nil || len(rawDigest) != sha256.Size || hex.EncodeToString(rawDigest) != credential.TokenSHA256 {
 			return nil, fmt.Errorf("%w: credential %q digest", ErrInvalidConfig, id)
 		}
 		var digest [sha256.Size]byte

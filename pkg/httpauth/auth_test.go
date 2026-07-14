@@ -130,7 +130,7 @@ func newTestAuthWithKeys(t *testing.T, token string, keys []httpauth.SessionKey)
 		t.Fatal(err)
 	}
 	method, err := statictoken.New("example", statictoken.Config{Credentials: map[string]statictoken.Credential{
-		"admin": {Name: "Administrator", SecretSHA256: digest},
+		"admin": {Name: "Administrator", TokenSHA256: digest},
 	}})
 	if err != nil {
 		t.Fatal(err)

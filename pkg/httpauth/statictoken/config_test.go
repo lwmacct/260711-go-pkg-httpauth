@@ -1,6 +1,8 @@
 package statictoken
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
 )
@@ -10,11 +12,15 @@ func TestGenerateAndValidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(generated.Token) != len("example.10.admin.")+32 || !strings.HasPrefix(generated.Token, "example.10.admin.") || len(generated.SecretSHA256) != 64 {
+	if len(generated.Token) != len("example.10.admin.")+32 || !strings.HasPrefix(generated.Token, "example.10.admin.") || len(generated.TokenSHA256) != 64 {
 		t.Fatalf("unexpected generated token: %#v", generated)
 	}
+	expectedDigest := sha256.Sum256([]byte(generated.Token))
+	if generated.TokenSHA256 != hex.EncodeToString(expectedDigest[:]) {
+		t.Fatalf("digest does not cover the complete token: %#v", generated)
+	}
 	method, err := New("example", Config{Credentials: map[string]Credential{
-		"admin": {Name: "Administrator", SecretSHA256: generated.SecretSHA256},
+		"admin": {Name: "Administrator", TokenSHA256: generated.TokenSHA256},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +37,7 @@ func TestRejectsLegacyAndMalformedTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	method, err := New("example", Config{Credentials: map[string]Credential{
-		"admin": {Name: "Administrator", SecretSHA256: digest},
+		"admin": {Name: "Administrator", TokenSHA256: digest},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -58,14 +64,14 @@ func TestValidateRejectsInvalidCredentials(t *testing.T) {
 	}
 	for _, config := range []Config{
 		{},
-		{Credentials: map[string]Credential{"Admin": {Name: "Administrator", SecretSHA256: validDigest}}},
-		{Credentials: map[string]Credential{"-admin": {Name: "Administrator", SecretSHA256: validDigest}}},
-		{Credentials: map[string]Credential{"admin": {Name: " Administrator", SecretSHA256: validDigest}}},
-		{Credentials: map[string]Credential{"admin": {Name: "Administrator", SecretSHA256: "invalid"}}},
-		{Credentials: map[string]Credential{"admin": {Name: "Administrator", SecretSHA256: strings.ToUpper(validDigest)}}},
+		{Credentials: map[string]Credential{"Admin": {Name: "Administrator", TokenSHA256: validDigest}}},
+		{Credentials: map[string]Credential{"-admin": {Name: "Administrator", TokenSHA256: validDigest}}},
+		{Credentials: map[string]Credential{"admin": {Name: " Administrator", TokenSHA256: validDigest}}},
+		{Credentials: map[string]Credential{"admin": {Name: "Administrator", TokenSHA256: "invalid"}}},
+		{Credentials: map[string]Credential{"admin": {Name: "Administrator", TokenSHA256: strings.ToUpper(validDigest)}}},
 		{Credentials: map[string]Credential{
-			"admin":      {Name: "Administrator", SecretSHA256: validDigest},
-			"automation": {Name: "Automation", SecretSHA256: validDigest},
+			"admin":      {Name: "Administrator", TokenSHA256: validDigest},
+			"automation": {Name: "Automation", TokenSHA256: validDigest},
 		}},
 	} {
 		if _, err := config.Validate(); err == nil {

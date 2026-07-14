@@ -13,7 +13,7 @@ import (
 
 func Example() {
 	tokenMethod, _ := statictoken.New("myapp", statictoken.Config{Credentials: map[string]statictoken.Credential{
-		"admin": {Name: "Administrator", SecretSHA256: os.Getenv("API_ACCESS_TOKEN_SECRET_SHA256")},
+		"admin": {Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
 	}})
 	auth, _ := httpauth.New(httpauth.Config{
 		ExternalURLs: []string{"https://tool.example.com"},
