@@ -1,13 +1,79 @@
 package statictoken
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestValidateRejectsDuplicateCredentialSecret(t *testing.T) {
-	_, err := (Config{Credentials: []Credential{
-		{ID: "admin", Name: "Administrator", Secret: "shared-secret-value"},
-		{ID: "automation", Name: "Automation", Secret: "shared-secret-value"},
-	}}).Validate()
-	if err == nil {
-		t.Fatal("duplicate credential secret was accepted")
+func TestGenerateAndValidate(t *testing.T) {
+	generated, err := Generate("example", "admin")
+	if err != nil {
+		t.Fatal(err)
 	}
+	if len(generated.Token) != len("example.10.admin.")+32 || !strings.HasPrefix(generated.Token, "example.10.admin.") || len(generated.SecretSHA256) != 64 {
+		t.Fatalf("unexpected generated token: %#v", generated)
+	}
+	method, err := New("example", Config{Credentials: map[string]Credential{
+		"admin": {Name: "Administrator", SecretSHA256: generated.SecretSHA256},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credential, ok := method.authenticate(generated.Token); !ok || credential.id != "admin" {
+		t.Fatal("generated token did not authenticate")
+	}
+}
+
+func TestRejectsLegacyAndMalformedTokens(t *testing.T) {
+	token := testToken("example", "admin", "a")
+	digest, err := Digest("example", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	method, err := New("example", Config{Credentials: map[string]Credential{
+		"admin": {Name: "Administrator", SecretSHA256: digest},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range []string{
+		"0123456789abcdef0123456789abcdef",
+		"550e8400-e29b-41d4-a716-446655440000",
+		" " + token,
+		token + " ",
+		"other.10.admin." + strings.Repeat("Y", 32),
+		"example.1.admin." + strings.Repeat("Y", 32),
+		"example.10.admin.short",
+	} {
+		if _, ok := method.authenticate(candidate); ok {
+			t.Fatalf("malformed token was accepted: %q", candidate)
+		}
+	}
+}
+
+func TestValidateRejectsInvalidCredentials(t *testing.T) {
+	validDigest, err := Digest("example", testToken("example", "admin", "a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, config := range []Config{
+		{},
+		{Credentials: map[string]Credential{"Admin": {Name: "Administrator", SecretSHA256: validDigest}}},
+		{Credentials: map[string]Credential{"-admin": {Name: "Administrator", SecretSHA256: validDigest}}},
+		{Credentials: map[string]Credential{"admin": {Name: " Administrator", SecretSHA256: validDigest}}},
+		{Credentials: map[string]Credential{"admin": {Name: "Administrator", SecretSHA256: "invalid"}}},
+		{Credentials: map[string]Credential{"admin": {Name: "Administrator", SecretSHA256: strings.ToUpper(validDigest)}}},
+		{Credentials: map[string]Credential{
+			"admin":      {Name: "Administrator", SecretSHA256: validDigest},
+			"automation": {Name: "Automation", SecretSHA256: validDigest},
+		}},
+	} {
+		if _, err := config.Validate(); err == nil {
+			t.Fatalf("invalid config was accepted: %#v", config)
+		}
+	}
+}
+
+func testToken(namespace, id, fill string) string {
+	return namespace + ".10." + id + "." + strings.Repeat(fill, 32)
 }

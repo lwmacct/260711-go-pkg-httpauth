@@ -3,6 +3,7 @@ package httpauth_test
 import (
 	"encoding/base64"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -11,8 +12,8 @@ import (
 )
 
 func Example() {
-	tokenMethod, _ := statictoken.New(statictoken.Config{Credentials: []statictoken.Credential{
-		{ID: "admin", Name: "Administrator", Secret: "example-access-token-secret"},
+	tokenMethod, _ := statictoken.New("myapp", statictoken.Config{Credentials: map[string]statictoken.Credential{
+		"admin": {Name: "Administrator", SecretSHA256: os.Getenv("API_ACCESS_TOKEN_SECRET_SHA256")},
 	}})
 	auth, _ := httpauth.New(httpauth.Config{
 		ExternalURLs: []string{"https://tool.example.com"},

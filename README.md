@@ -59,9 +59,9 @@ import (
 	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/statictoken"
 )
 
-tokenMethod, err := statictoken.New(statictoken.Config{
-	Credentials: []statictoken.Credential{
-		{ID: "admin", Name: "Administrator", Secret: os.Getenv("API_ACCESS_TOKEN")},
+tokenMethod, err := statictoken.New("myapp", statictoken.Config{
+	Credentials: map[string]statictoken.Credential{
+		"admin": {Name: "Administrator", SecretSHA256: os.Getenv("API_ACCESS_TOKEN_SECRET_SHA256")},
 	},
 })
 if err != nil {
@@ -113,6 +113,11 @@ openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 `Session.Keys` 是 key ring。第一把 key 用于写入，所有 key 都可解密；轮换时先将新 key
 插入首位，旧 Session 在旧 key 移除前继续有效。
 
+静态 token 使用 `<namespace>.10.<credential-id>.<secret>` 格式。namespace 由应用定义，
+secret 是 24 个随机字节的无填充 Base64URL 编码；配置只保存解码后 secret 的小写十六进制 SHA-256 摘要。
+可用 `statictoken.Generate("myapp", "admin")` 同时生成 token 和配置摘要。旧式任意字符串、
+UUID、错误版本、非规范 Base64URL 与带前后空白的 token 均不接受。
+
 ## 安全模型
 
 - HTTPS 使用 `__Host-httpauth` Cookie；loopback HTTP 开发环境使用 `httpauth`。
@@ -129,6 +134,10 @@ OIDC provider 必须注册由 method ID 派生的 callback，例如：
 ```text
 https://tool.example.com/auth/callback/github
 ```
+
+`oidc` 驱动要求 provider 支持 OpenID Connect discovery 并返回可验证的 ID Token。
+`dexgithub` 适配的是 Dex GitHub connector 的 claims，不支持直接连接 GitHub OAuth App；
+GitHub 原生 OAuth 需要单独的 OAuth 驱动，通过 GitHub API 获取并映射用户身份。
 
 ## 验证
 
