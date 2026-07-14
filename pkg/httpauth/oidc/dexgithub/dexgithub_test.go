@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
 )
 
 func TestMapperAndUsernameAuthorizer(t *testing.T) {

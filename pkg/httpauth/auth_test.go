@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth"
-	"github.com/lwmacct/260711-go-pkg-httpauth/statictoken"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/statictoken"
 )
 
 const testToken = "dproxy.0123456789abcdefghijklmnopqrstuvwxyz"

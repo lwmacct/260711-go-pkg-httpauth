@@ -16,7 +16,7 @@ import (
 	"time"
 
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
-	"github.com/lwmacct/260711-go-pkg-httpauth"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
 	"golang.org/x/oauth2"
 )
 

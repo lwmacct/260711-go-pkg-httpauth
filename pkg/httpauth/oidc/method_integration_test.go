@@ -16,7 +16,7 @@ import (
 
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/coreos/go-oidc/v3/oidc/oidctest"
-	"github.com/lwmacct/260711-go-pkg-httpauth"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
 )
 
 func TestOIDCLoginCallbackAndUnifiedSession(t *testing.T) {

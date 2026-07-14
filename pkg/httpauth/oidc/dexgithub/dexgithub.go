@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth"
-	"github.com/lwmacct/260711-go-pkg-httpauth/oidc"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/oidc"
 )
 
 func New(ctx context.Context, config oidc.Config, options oidc.Options) (*oidc.Method, error) {

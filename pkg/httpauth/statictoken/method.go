@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
 )
 
 const maxTokenBytes = 64 << 10

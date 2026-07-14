@@ -1,6 +1,6 @@
 # go-pkg-httpauth
 
-`httpauth` 为 Go HTTP 服务提供统一的浏览器 Session、Bearer 认证、登录方式发现、
+`pkg/httpauth` 为 Go HTTP 服务提供统一的浏览器 Session、Bearer 认证、登录方式发现、
 授权中间件和认证路由。静态 token 与 OIDC 是可组合的认证驱动，应用只暴露一套
 Session API。
 
@@ -52,6 +52,13 @@ GET    /auth/callback/github
 ## 使用
 
 ```go
+import (
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/oidc"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/oidc/dexgithub"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/statictoken"
+)
+
 tokenMethod, err := statictoken.New(statictoken.Config{
 	Credentials: []statictoken.Credential{
 		{ID: "admin", Name: "Administrator", Secret: os.Getenv("API_ACCESS_TOKEN")},
