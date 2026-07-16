@@ -59,9 +59,8 @@ import (
 )
 
 tokenMethod, err := statictoken.New(statictoken.Config{
-	Namespace: "myapp",
 	Credentials: []statictoken.Credential{
-		{ID: "admin", Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
+		{ID: "admin", Name: "Administrator", Token: os.Getenv("AUTH_TOKEN")},
 	},
 })
 if err != nil {
@@ -111,10 +110,10 @@ openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 `Session.Keys` 是 key ring。第一把 key 用于写入，所有 key 都可解密；轮换时先将新 key
 插入首位，旧 Session 在旧 key 移除前继续有效。
 
-静态 token 使用 `<namespace>.10.<credential-id>.<secret>` 格式。namespace 由应用定义，
-secret 是 24 个随机字节的无填充 Base64URL 编码；配置只保存完整规范 token 的小写十六进制 SHA-256 摘要。
-可用 `statictoken.Generate("myapp", "admin")` 同时生成 token 和配置摘要。旧式任意字符串、
-UUID、错误版本、非规范 Base64URL 与带前后空白的 token 均不接受。
+静态 token 是 opaque Bearer secret，不规定 namespace、版本、credential ID 或编码格式。
+只要是非空且不含空白/控制字符的字符串即可；配置直接保存 token，适合沿用 Redis ACL、
+上游 API key 或现有密钥。服务启动时只计算 SHA-256 verifier，运行时不保存明文 token。
+生产环境应使用密码管理器或环境变量注入高熵随机值；短或可猜的 token 仍然不安全。
 
 ## 安全模型
 

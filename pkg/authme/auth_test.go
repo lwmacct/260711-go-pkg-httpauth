@@ -13,7 +13,7 @@ import (
 	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme/adapters/statictoken"
 )
 
-var testToken = "example.10.admin." + strings.Repeat("Y", 32)
+var testToken = "test-token/with.punctuation~1"
 
 func TestTokenSessionLifecycle(t *testing.T) {
 	auth := newTestAuth(t, testToken)
@@ -73,7 +73,7 @@ func TestInvalidExplicitBearerDoesNotFallBackToSession(t *testing.T) {
 func TestSessionRevokedWhenTokenChanges(t *testing.T) {
 	first := newTestAuth(t, testToken)
 	cookie := loginCookie(t, first, testToken)
-	second := newTestAuth(t, "example.10.admin."+strings.Repeat("Z", 32))
+	second := newTestAuth(t, "rotated-token")
 
 	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/auth/session", nil)
 	request.AddCookie(cookie)
@@ -125,12 +125,8 @@ func newTestAuth(t *testing.T, token string) *authme.Auth {
 
 func newTestAuthWithKeys(t *testing.T, token string, keys []authme.SessionKey) *authme.Auth {
 	t.Helper()
-	digest, err := statictoken.Digest("example", token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	method, err := statictoken.New(statictoken.Config{Namespace: "example", Credentials: []statictoken.Credential{
-		{ID: "admin", Name: "Administrator", TokenSHA256: digest},
+	method, err := statictoken.New(statictoken.Config{Credentials: []statictoken.Credential{
+		{ID: "admin", Name: "Administrator", Token: token},
 	}})
 	if err != nil {
 		t.Fatal(err)

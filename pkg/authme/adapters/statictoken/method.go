@@ -2,38 +2,28 @@ package statictoken
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"unicode"
 
 	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme"
 )
 
 type Method struct {
-	namespace   string
-	credentials map[string]storedCredential
-	id          string
-	label       string
+	byDigest map[[sha256.Size]byte]storedCredential
+	byID     map[string]storedCredential
+	id       string
+	label    string
 }
 
 type storedCredential struct {
 	id       string
 	name     string
-	digest   [sha256.Size]byte
 	revision string
-}
-
-type Generated struct {
-	Token       string
-	TokenSHA256 string
 }
 
 func New(config Config) (*Method, error) {
@@ -45,37 +35,17 @@ func New(config Config) (*Method, error) {
 	if err != nil {
 		return nil, err
 	}
-	credentials := make(map[string]storedCredential, len(validated))
-	for id, credential := range validated {
-		credentials[id] = storedCredential{
-			id: id, name: credential.name, digest: credential.digest,
+	byDigest := make(map[[sha256.Size]byte]storedCredential, len(validated))
+	byID := make(map[string]storedCredential, len(validated))
+	for _, credential := range validated {
+		stored := storedCredential{
+			id: credential.id, name: credential.name,
 			revision: hex.EncodeToString(credential.digest[:]),
 		}
+		byDigest[credential.digest] = stored
+		byID[credential.id] = stored
 	}
-	return &Method{namespace: normalized.Namespace, credentials: credentials, id: normalized.ID, label: normalized.Label}, nil
-}
-
-func Generate(namespace, id string) (Generated, error) {
-	if !validNamespace(namespace) || !validCredentialID(id) {
-		return Generated{}, fmt.Errorf("%w: token identity", ErrInvalidConfig)
-	}
-	secret := make([]byte, SecretBytes)
-	if _, err := rand.Read(secret); err != nil {
-		return Generated{}, fmt.Errorf("generate access token: %w", err)
-	}
-	token := strings.Join([]string{namespace, tokenVersion, id, base64.RawURLEncoding.EncodeToString(secret)}, ".")
-	if len(token) > MaxTokenBytes {
-		return Generated{}, fmt.Errorf("%w: token is too long", ErrInvalidConfig)
-	}
-	return Generated{Token: token, TokenSHA256: digestToken(token)}, nil
-}
-
-func Digest(namespace, token string) (string, error) {
-	_, ok := parse(namespace, token)
-	if !ok {
-		return "", fmt.Errorf("%w: token", ErrInvalidConfig)
-	}
-	return digestToken(token), nil
+	return &Method{byDigest: byDigest, byID: byID, id: normalized.ID, label: normalized.Label}, nil
 }
 
 func (m *Method) Info() authme.MethodInfo {
@@ -120,44 +90,35 @@ func (m *Method) AuthenticateBearer(_ context.Context, token string) (authme.Ses
 }
 
 func (m *Method) ValidateSession(_ context.Context, session authme.Session) (authme.Principal, error) {
-	credential, exists := m.credentials[session.CredentialID]
-	if !exists || subtle.ConstantTimeCompare([]byte(credential.revision), []byte(session.Revision)) != 1 {
+	credential, exists := m.byID[session.CredentialID]
+	if !exists || credential.revision != session.Revision {
 		return authme.Principal{}, authme.ErrUnauthenticated
 	}
 	return principal(credential), nil
 }
 
 func (m *Method) authenticate(token string) (storedCredential, bool) {
-	id, ok := parse(m.namespace, token)
-	if !ok {
+	if !validToken(token) {
 		return storedCredential{}, false
 	}
-	credential, exists := m.credentials[id]
+	digest := sha256.Sum256([]byte(token))
+	credential, exists := m.byDigest[digest]
 	if !exists {
 		return storedCredential{}, false
 	}
-	digest := sha256.Sum256([]byte(token))
-	return credential, subtle.ConstantTimeCompare(digest[:], credential.digest[:]) == 1
+	return credential, true
 }
 
-func parse(namespace, token string) (string, bool) {
-	if len(token) > MaxTokenBytes || token != strings.TrimSpace(token) {
-		return "", false
+func validToken(token string) bool {
+	if token == "" || len(token) > MaxTokenBytes {
+		return false
 	}
-	parts := strings.Split(token, ".")
-	if len(parts) != 4 || parts[0] != namespace || parts[1] != tokenVersion || !validCredentialID(parts[2]) {
-		return "", false
+	for _, char := range token {
+		if unicode.IsSpace(char) || unicode.IsControl(char) {
+			return false
+		}
 	}
-	secret, err := base64.RawURLEncoding.DecodeString(parts[3])
-	if err != nil || len(secret) != SecretBytes || base64.RawURLEncoding.EncodeToString(secret) != parts[3] {
-		return "", false
-	}
-	return parts[2], true
-}
-
-func digestToken(token string) string {
-	digest := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(digest[:])
+	return true
 }
 
 func (m *Method) session(credential storedCredential) authme.Session {
