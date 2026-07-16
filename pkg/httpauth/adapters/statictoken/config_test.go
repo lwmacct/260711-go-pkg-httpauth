@@ -19,8 +19,8 @@ func TestGenerateAndValidate(t *testing.T) {
 	if generated.TokenSHA256 != hex.EncodeToString(expectedDigest[:]) {
 		t.Fatalf("digest does not cover the complete token: %#v", generated)
 	}
-	method, err := New(Config{Namespace: "example", Credentials: map[string]Credential{
-		"admin": {Name: "Administrator", TokenSHA256: generated.TokenSHA256},
+	method, err := New(Config{Namespace: "example", Credentials: []Credential{
+		{ID: "admin", Name: "Administrator", TokenSHA256: generated.TokenSHA256},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -36,8 +36,8 @@ func TestRejectsLegacyAndMalformedTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	method, err := New(Config{Namespace: "example", Credentials: map[string]Credential{
-		"admin": {Name: "Administrator", TokenSHA256: digest},
+	method, err := New(Config{Namespace: "example", Credentials: []Credential{
+		{ID: "admin", Name: "Administrator", TokenSHA256: digest},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -64,14 +64,18 @@ func TestValidateRejectsInvalidCredentials(t *testing.T) {
 	}
 	for _, config := range []Config{
 		{},
-		{Credentials: map[string]Credential{"Admin": {Name: "Administrator", TokenSHA256: validDigest}}},
-		{Credentials: map[string]Credential{"-admin": {Name: "Administrator", TokenSHA256: validDigest}}},
-		{Credentials: map[string]Credential{"admin": {Name: " Administrator", TokenSHA256: validDigest}}},
-		{Credentials: map[string]Credential{"admin": {Name: "Administrator", TokenSHA256: "invalid"}}},
-		{Credentials: map[string]Credential{"admin": {Name: "Administrator", TokenSHA256: strings.ToUpper(validDigest)}}},
-		{Credentials: map[string]Credential{
-			"admin":      {Name: "Administrator", TokenSHA256: validDigest},
-			"automation": {Name: "Automation", TokenSHA256: validDigest},
+		{Credentials: []Credential{{ID: "Admin", Name: "Administrator", TokenSHA256: validDigest}}},
+		{Credentials: []Credential{{ID: "-admin", Name: "Administrator", TokenSHA256: validDigest}}},
+		{Credentials: []Credential{{ID: "admin", Name: " Administrator", TokenSHA256: validDigest}}},
+		{Credentials: []Credential{{ID: "admin", Name: "Administrator", TokenSHA256: "invalid"}}},
+		{Credentials: []Credential{{ID: "admin", Name: "Administrator", TokenSHA256: strings.ToUpper(validDigest)}}},
+		{Credentials: []Credential{
+			{ID: "admin", Name: "Administrator", TokenSHA256: validDigest},
+			{ID: "admin", Name: "Automation", TokenSHA256: strings.Repeat("b", 64)},
+		}},
+		{Credentials: []Credential{
+			{ID: "admin", Name: "Administrator", TokenSHA256: validDigest},
+			{ID: "automation", Name: "Automation", TokenSHA256: validDigest},
 		}},
 	} {
 		if err := config.Validate(); err == nil {

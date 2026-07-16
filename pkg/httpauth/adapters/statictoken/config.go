@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"maps"
 	"strings"
 )
 
@@ -20,16 +19,20 @@ const (
 
 var ErrInvalidConfig = errors.New("invalid static token config")
 
+// Credential describes one configured access token identity.
 type Credential struct {
-	Name        string `json:"name"         desc:"Display name"`
+	ID          string `json:"id" desc:"Credential ID"`
+	Name        string `json:"name" desc:"Display name"`
 	TokenSHA256 string `json:"token-sha256" desc:"Lowercase hexadecimal SHA-256 digest of the complete access token"`
 }
 
+// Config contains file- and CLI-friendly static token settings. Runtime
+// authentication uses a private map built by New.
 type Config struct {
-	ID          string                `json:"id" desc:"Authentication method ID"`
-	Label       string                `json:"label" desc:"Authentication method display label"`
-	Namespace   string                `json:"namespace" desc:"Token namespace"`
-	Credentials map[string]Credential `json:"credentials" desc:"Static access tokens keyed by credential ID"`
+	ID          string       `json:"id" desc:"Authentication method ID"`
+	Label       string       `json:"label" desc:"Authentication method display label"`
+	Namespace   string       `json:"namespace" desc:"Token namespace"`
+	Credentials []Credential `json:"credentials" desc:"Static access token credentials"`
 }
 
 func DefaultConfig() Config { return Config{ID: "token", Label: "Access token"} }
@@ -38,7 +41,9 @@ func (c Config) Normalize() (Config, error) {
 	c.ID = strings.TrimSpace(c.ID)
 	c.Label = strings.TrimSpace(c.Label)
 	c.Namespace = strings.TrimSpace(c.Namespace)
-	c.Credentials = maps.Clone(c.Credentials)
+	if c.Credentials != nil {
+		c.Credentials = append([]Credential(nil), c.Credentials...)
+	}
 	if c.ID == "" {
 		c.ID = "token"
 	}
@@ -76,13 +81,16 @@ func (c Config) validate() (map[string]validatedCredential, error) {
 	}
 	validated := make(map[string]validatedCredential, len(c.Credentials))
 	seenDigests := make([][sha256.Size]byte, 0, len(c.Credentials))
-	for id, credential := range c.Credentials {
-		if !validCredentialID(id) || credential.Name == "" || credential.Name != strings.TrimSpace(credential.Name) {
-			return nil, fmt.Errorf("%w: credential %q", ErrInvalidConfig, id)
+	for _, credential := range c.Credentials {
+		if !validCredentialID(credential.ID) || credential.Name == "" || credential.Name != strings.TrimSpace(credential.Name) {
+			return nil, fmt.Errorf("%w: credential %q", ErrInvalidConfig, credential.ID)
+		}
+		if _, exists := validated[credential.ID]; exists {
+			return nil, fmt.Errorf("%w: duplicate credential %q", ErrInvalidConfig, credential.ID)
 		}
 		rawDigest, err := hex.DecodeString(credential.TokenSHA256)
 		if err != nil || len(rawDigest) != sha256.Size || hex.EncodeToString(rawDigest) != credential.TokenSHA256 {
-			return nil, fmt.Errorf("%w: credential %q digest", ErrInvalidConfig, id)
+			return nil, fmt.Errorf("%w: credential %q digest", ErrInvalidConfig, credential.ID)
 		}
 		var digest [sha256.Size]byte
 		copy(digest[:], rawDigest)
@@ -92,7 +100,7 @@ func (c Config) validate() (map[string]validatedCredential, error) {
 			}
 		}
 		seenDigests = append(seenDigests, digest)
-		validated[id] = validatedCredential{id: id, name: credential.Name, digest: digest}
+		validated[credential.ID] = validatedCredential{id: credential.ID, name: credential.Name, digest: digest}
 	}
 	return validated, nil
 }

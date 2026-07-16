@@ -12,8 +12,8 @@ import (
 )
 
 func Example() {
-	tokenMethod, _ := statictoken.New(statictoken.Config{Namespace: "myapp", Credentials: map[string]statictoken.Credential{
-		"admin": {Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
+	tokenMethod, _ := statictoken.New(statictoken.Config{Namespace: "myapp", Credentials: []statictoken.Credential{
+		{ID: "admin", Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
 	}})
 	auth, _ := httpauth.New(httpauth.Config{
 		Origins: []string{"https://tool.example.com"},
