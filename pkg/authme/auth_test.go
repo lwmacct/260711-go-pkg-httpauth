@@ -165,7 +165,7 @@ func TestUnsafeSessionRequestRequiresTrustedOrigin(t *testing.T) {
 	}
 }
 
-func TestWithLoggerRecordsUnexpectedBearerFailure(t *testing.T) {
+func TestWithLoggerDoesNotLogBearerFailure(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))
 	auth := newTestAuthWithOptions(t, failingBearerMethod{err: errors.New("credential backend unavailable")}, authme.WithLogger(logger))
@@ -175,9 +175,8 @@ func TestWithLoggerRecordsUnexpectedBearerFailure(t *testing.T) {
 	if _, err := auth.Authenticate(request); err == nil {
 		t.Fatal("unexpected bearer failure was ignored")
 	}
-	message := output.String()
-	if !strings.Contains(message, `"msg":"authentication method failed"`) || !strings.Contains(message, `"method":"failing"`) || !strings.Contains(message, `"error":"credential backend unavailable"`) {
-		t.Fatalf("unexpected log output: %s", message)
+	if output.Len() != 0 {
+		t.Fatalf("request error was logged: %s", output.String())
 	}
 }
 
@@ -225,8 +224,8 @@ func TestRequireAccessDistinguishesDenialFromAuthorizerFailure(t *testing.T) {
 			if test.name == "denied" && output.Len() != 0 {
 				t.Fatalf("expected denial was logged: %s", output.String())
 			}
-			if test.name == "unavailable" && !strings.Contains(output.String(), `"msg":"authorization failed"`) {
-				t.Fatalf("authorizer failure was not logged: %s", output.String())
+			if output.Len() != 0 {
+				t.Fatalf("authorization error was logged: %s", output.String())
 			}
 		})
 	}

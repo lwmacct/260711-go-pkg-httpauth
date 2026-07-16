@@ -72,8 +72,8 @@ func WithClock(clock Clock) Option {
 	return optionFunc(func(options *authOptions) error { options.clock = clock; return nil })
 }
 
-// WithLogger supplies the logger used for unexpected authentication and
-// authorization failures. Invalid credentials are not logged.
+// WithLogger is reserved for integrations that add runtime diagnostics.
+// Authme request errors are returned to the caller and are not logged here.
 func WithLogger(logger *slog.Logger) Option {
 	return optionFunc(func(options *authOptions) error { options.logger = logger; return nil })
 }

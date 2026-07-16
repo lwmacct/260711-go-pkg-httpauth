@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -25,7 +24,6 @@ type Auth struct {
 	byID           map[string]Method
 	routes         http.Handler
 	cookieCleaners []func(http.ResponseWriter)
-	logger         *slog.Logger
 }
 
 func New(config Config, options ...Option) (*Auth, error) {
@@ -52,14 +50,11 @@ func New(config Config, options ...Option) (*Auth, error) {
 	if runtime.clock == nil {
 		runtime.clock = ClockFunc(time.Now)
 	}
-	if runtime.logger == nil {
-		runtime.logger = slog.Default()
-	}
 	codec, err := session.New(normalized.Session, origins.Secure(), runtime.random, runtime.clock.Now)
 	if err != nil {
 		return nil, err
 	}
-	auth := &Auth{prefix: normalized.Prefix, origins: origins, codec: codec, authorizer: runtime.authorizer, methods: append([]Method(nil), runtime.methods...), byID: make(map[string]Method, len(runtime.methods)), logger: runtime.logger}
+	auth := &Auth{prefix: normalized.Prefix, origins: origins, codec: codec, authorizer: runtime.authorizer, methods: append([]Method(nil), runtime.methods...), byID: make(map[string]Method, len(runtime.methods))}
 	for _, method := range auth.methods {
 		if method == nil {
 			return nil, fmt.Errorf("%w: nil authentication method", ErrInvalidConfig)
@@ -86,11 +81,7 @@ type boundIssuer struct {
 }
 
 func (i boundIssuer) IssueSession(w http.ResponseWriter, session Session) error {
-	if err := i.auth.codec.Issue(w, i.method, session); err != nil {
-		i.auth.logger.Error("issue session failed", "method", i.method, "error", err)
-		return err
-	}
-	return nil
+	return i.auth.codec.Issue(w, i.method, session)
 }
 func (i boundIssuer) ExternalURL(r *http.Request) (*url.URL, bool) {
 	return i.auth.origins.ExternalURL(r)
@@ -144,7 +135,6 @@ func (a *Auth) Authenticate(r *http.Request) (Authentication, error) {
 				return Authentication{Method: method.Info().ID, Transport: TransportBearer, CredentialID: session.CredentialID, Principal: session.Principal}, nil
 			}
 			if !errors.Is(err, ErrUnauthenticated) {
-				a.logger.Error("authentication method failed", "method", method.Info().ID, "error", err)
 				return Authentication{}, err
 			}
 		}
@@ -160,9 +150,6 @@ func (a *Auth) Authenticate(r *http.Request) (Authentication, error) {
 	}
 	principal, err := method.ValidateSession(r.Context(), envelope.Session)
 	if err != nil {
-		if !errors.Is(err, ErrUnauthenticated) {
-			a.logger.Error("session validation failed", "method", envelope.Method, "error", err)
-		}
 		return Authentication{}, err
 	}
 	return Authentication{Method: envelope.Method, Transport: TransportSession, CredentialID: envelope.Session.CredentialID, Principal: principal}, nil
@@ -175,7 +162,6 @@ func (a *Auth) Authorize(ctx context.Context, authentication Authentication) err
 		if errors.Is(err, ErrForbidden) {
 			return err
 		}
-		a.logger.Error("authorization failed", "method", authentication.Method, "error", err)
 		return err
 	}
 	return nil

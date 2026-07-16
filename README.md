@@ -103,8 +103,8 @@ mux.Handle(auth.PathPrefix()+"/", auth.Handler())
 mux.Handle("/api/", auth.RequireAccess(api))
 ```
 
-AuthMe 不会强制使用全局 logger。需要接入宿主应用的 `log/slog` 时，可通过 option 注入；
-普通无效凭据不会记录，认证后端或授权后端异常会记录：
+AuthMe 不会强制使用全局 logger。`WithLogger` 接口可供集成方保留统一配置，但 AuthMe
+自身将请求错误通过返回值和 HTTP 响应传递，不会把普通认证/授权失败写入 logger：
 
 ```go
 auth, err := authme.New(config,

@@ -140,7 +140,6 @@ func (m *Method) CallbackHandler(issuer authme.RedirectContext) http.Handler {
 		}
 		identity, err := m.client.Exchange(r.Context(), oidc.Flow{State: flow.State, Nonce: flow.Nonce, Verifier: flow.Verifier, RedirectURI: flow.RedirectURI}, r.URL.Query().Get("code"))
 		if err != nil {
-			m.options.logger.Warn("OIDC identity validation failed", "error", err)
 			if errors.Is(err, oidc.ErrExchange) {
 				authme.WriteError(w, http.StatusBadGateway, "oidc_exchange_failed", "Login failed")
 				return
