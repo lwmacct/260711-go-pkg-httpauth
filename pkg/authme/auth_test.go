@@ -22,6 +22,17 @@ func TestDefaultPathPrefix(t *testing.T) {
 	}
 }
 
+func TestDefaultSessionTTL(t *testing.T) {
+	config := authme.Config{Origins: []string{"https://tool.example.com"}}
+	normalized, err := config.Normalize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalized.Session.TTL != 24*time.Hour {
+		t.Fatalf("unexpected default session TTL: %s", normalized.Session.TTL)
+	}
+}
+
 func TestCustomPathPrefix(t *testing.T) {
 	method, err := statictoken.New(statictoken.Config{Credentials: []statictoken.Credential{
 		{ID: "admin", Name: "Administrator", Token: testToken},

@@ -15,7 +15,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{Prefix: "/authme", Session: SessionConfig{TTL: 24 * time.Hour}}
+	return Config{Prefix: "/authme"}
 }
 
 func (c Config) Normalize() (Config, error) {
@@ -23,6 +23,9 @@ func (c Config) Normalize() (Config, error) {
 	c.Prefix = strings.TrimRight(strings.TrimSpace(c.Prefix), "/")
 	if c.Prefix == "" {
 		c.Prefix = "/authme"
+	}
+	if c.Session.TTL == 0 {
+		c.Session.TTL = 24 * time.Hour
 	}
 	for index, origin := range c.Origins {
 		c.Origins[index] = strings.TrimRight(strings.TrimSpace(origin), "/")
