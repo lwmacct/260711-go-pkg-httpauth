@@ -60,8 +60,8 @@ import (
 
 tokenMethod, err := statictoken.New(statictoken.Config{
 	Namespace: "myapp",
-	Credentials: map[string]statictoken.Credential{
-		"admin": {Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
+	Credentials: []statictoken.Credential{
+		{ID: "admin", Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
 	},
 })
 if err != nil {
