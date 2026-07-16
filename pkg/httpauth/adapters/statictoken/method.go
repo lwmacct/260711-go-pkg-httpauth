@@ -20,6 +20,8 @@ import (
 type Method struct {
 	namespace   string
 	credentials map[string]storedCredential
+	id          string
+	label       string
 }
 
 type storedCredential struct {
@@ -34,11 +36,12 @@ type Generated struct {
 	TokenSHA256 string
 }
 
-func New(namespace string, config Config) (*Method, error) {
-	if !validNamespace(namespace) {
-		return nil, fmt.Errorf("%w: namespace", ErrInvalidConfig)
+func New(config Config) (*Method, error) {
+	normalized, err := config.Normalize()
+	if err != nil {
+		return nil, err
 	}
-	validated, err := config.validate()
+	validated, err := normalized.validate()
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +52,7 @@ func New(namespace string, config Config) (*Method, error) {
 			revision: hex.EncodeToString(credential.digest[:]),
 		}
 	}
-	return &Method{namespace: namespace, credentials: credentials}, nil
+	return &Method{namespace: normalized.Namespace, credentials: credentials, id: normalized.ID, label: normalized.Label}, nil
 }
 
 func Generate(namespace, id string) (Generated, error) {
@@ -76,7 +79,7 @@ func Digest(namespace, token string) (string, error) {
 }
 
 func (m *Method) Info() httpauth.MethodInfo {
-	return httpauth.MethodInfo{ID: "token", Flow: httpauth.LoginFlowSecret, Label: "Access token"}
+	return httpauth.MethodInfo{ID: m.id, Flow: httpauth.LoginFlowSecret, Label: m.label}
 }
 
 func (m *Method) LoginHandler(issuer httpauth.SessionIssuer) http.Handler {
@@ -158,7 +161,7 @@ func digestToken(token string) string {
 }
 
 func (m *Method) session(credential storedCredential) httpauth.Session {
-	return httpauth.Session{Method: "token", CredentialID: credential.id, Revision: credential.revision, Principal: principal(credential)}
+	return httpauth.Session{CredentialID: credential.id, Revision: credential.revision, Principal: principal(credential)}
 }
 
 func principal(credential storedCredential) httpauth.Principal {

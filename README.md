@@ -54,12 +54,12 @@ GET    /auth/callback/github
 ```go
 import (
 	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/oidc"
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/oidc/dexgithub"
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/statictoken"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/adapters/dexgithub"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/adapters/statictoken"
 )
 
-tokenMethod, err := statictoken.New("myapp", statictoken.Config{
+tokenMethod, err := statictoken.New(statictoken.Config{
+	Namespace: "myapp",
 	Credentials: map[string]statictoken.Credential{
 		"admin": {Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
 	},
@@ -68,13 +68,13 @@ if err != nil {
 	log.Fatal(err)
 }
 
-githubMethod, err := dexgithub.New(ctx, oidc.Config{
+githubMethod, err := dexgithub.New(ctx, dexgithub.Config{
 	ID:         "github",
 	Label:      "GitHub",
 	Issuer:     "https://dex.example.com",
 	ClientID:   "tool",
 	SessionTTL: 24 * time.Hour,
-}, oidc.Options{})
+})
 if err != nil {
 	log.Fatal(err)
 }
@@ -85,16 +85,14 @@ if err != nil {
 }
 
 auth, err := httpauth.New(httpauth.Config{
-	ExternalURLs: []string{"https://tool.example.com"},
+	Origins: []string{"https://tool.example.com"},
 	Session: httpauth.SessionConfig{
 		TTL: 24 * time.Hour,
 		Keys: []httpauth.SessionKey{
 			{ID: "2026-07", Secret: os.Getenv("AUTH_SESSION_KEY")},
 		},
 	},
-}, []httpauth.Method{tokenMethod, githubMethod}, httpauth.Options{
-	Authorizer: githubUsers,
-})
+}, httpauth.WithMethods(tokenMethod, githubMethod), httpauth.WithAuthorizer(githubUsers))
 if err != nil {
 	log.Fatal(err)
 }
@@ -135,9 +133,8 @@ OIDC provider 必须注册由 method ID 派生的 callback，例如：
 https://tool.example.com/auth/callback/github
 ```
 
-`oidc` 驱动要求 provider 支持 OpenID Connect discovery 并返回可验证的 ID Token。
-`dexgithub` 适配的是 Dex GitHub connector 的 claims，不支持直接连接 GitHub OAuth App；
-GitHub 原生 OAuth 需要单独的 OAuth 驱动，通过 GitHub API 获取并映射用户身份。
+`pkg/oidc` 是不依赖 `httpauth` 的协议包，负责 discovery、PKCE、nonce、code exchange
+和 ID Token 验证。`dexgithub` 适配 Dex GitHub connector 的 claims。
 
 ## 验证
 

@@ -8,20 +8,20 @@ import (
 	"time"
 
 	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/statictoken"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/adapters/statictoken"
 )
 
 func Example() {
-	tokenMethod, _ := statictoken.New("myapp", statictoken.Config{Credentials: map[string]statictoken.Credential{
+	tokenMethod, _ := statictoken.New(statictoken.Config{Namespace: "myapp", Credentials: map[string]statictoken.Credential{
 		"admin": {Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
 	}})
 	auth, _ := httpauth.New(httpauth.Config{
-		ExternalURLs: []string{"https://tool.example.com"},
+		Origins: []string{"https://tool.example.com"},
 		Session: httpauth.SessionConfig{
 			TTL:  time.Hour,
 			Keys: []httpauth.SessionKey{{ID: "primary", Secret: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("k", 32)))}},
 		},
-	}, []httpauth.Method{tokenMethod}, httpauth.Options{})
+	}, httpauth.WithMethods(tokenMethod))
 
 	mux := http.NewServeMux()
 	mux.Handle("/auth/", auth.Handler())

@@ -19,7 +19,7 @@ func TestGenerateAndValidate(t *testing.T) {
 	if generated.TokenSHA256 != hex.EncodeToString(expectedDigest[:]) {
 		t.Fatalf("digest does not cover the complete token: %#v", generated)
 	}
-	method, err := New("example", Config{Credentials: map[string]Credential{
+	method, err := New(Config{Namespace: "example", Credentials: map[string]Credential{
 		"admin": {Name: "Administrator", TokenSHA256: generated.TokenSHA256},
 	}})
 	if err != nil {
@@ -36,7 +36,7 @@ func TestRejectsLegacyAndMalformedTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	method, err := New("example", Config{Credentials: map[string]Credential{
+	method, err := New(Config{Namespace: "example", Credentials: map[string]Credential{
 		"admin": {Name: "Administrator", TokenSHA256: digest},
 	}})
 	if err != nil {
@@ -74,7 +74,7 @@ func TestValidateRejectsInvalidCredentials(t *testing.T) {
 			"automation": {Name: "Automation", TokenSHA256: validDigest},
 		}},
 	} {
-		if _, err := config.Validate(); err == nil {
+		if err := config.Validate(); err == nil {
 			t.Fatalf("invalid config was accepted: %#v", config)
 		}
 	}

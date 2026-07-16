@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 )
 
@@ -25,7 +26,29 @@ type Credential struct {
 }
 
 type Config struct {
+	ID          string                `json:"id" desc:"Authentication method ID"`
+	Label       string                `json:"label" desc:"Authentication method display label"`
+	Namespace   string                `json:"namespace" desc:"Token namespace"`
 	Credentials map[string]Credential `json:"credentials" desc:"Static access tokens keyed by credential ID"`
+}
+
+func DefaultConfig() Config { return Config{ID: "token", Label: "Access token"} }
+
+func (c Config) Normalize() (Config, error) {
+	c.ID = strings.TrimSpace(c.ID)
+	c.Label = strings.TrimSpace(c.Label)
+	c.Namespace = strings.TrimSpace(c.Namespace)
+	c.Credentials = maps.Clone(c.Credentials)
+	if c.ID == "" {
+		c.ID = "token"
+	}
+	if c.Label == "" {
+		c.Label = "Access token"
+	}
+	if err := c.Validate(); err != nil {
+		return Config{}, err
+	}
+	return c, nil
 }
 
 type validatedCredential struct {
@@ -34,11 +57,17 @@ type validatedCredential struct {
 	digest [sha256.Size]byte
 }
 
-func (c Config) Validate() (Config, error) {
-	if _, err := c.validate(); err != nil {
-		return c, err
+func (c Config) Validate() error {
+	if c.Namespace == "" || !validNamespace(c.Namespace) {
+		return fmt.Errorf("%w: namespace", ErrInvalidConfig)
 	}
-	return c, nil
+	if c.ID == "" || c.Label == "" || strings.ContainsAny(c.ID, "/?#") {
+		return fmt.Errorf("%w: method identity", ErrInvalidConfig)
+	}
+	if _, err := c.validate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c Config) validate() (map[string]validatedCredential, error) {

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/statictoken"
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/adapters/statictoken"
 )
 
 var testToken = "example.10.admin." + strings.Repeat("Y", 32)
@@ -129,16 +129,16 @@ func newTestAuthWithKeys(t *testing.T, token string, keys []httpauth.SessionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	method, err := statictoken.New("example", statictoken.Config{Credentials: map[string]statictoken.Credential{
+	method, err := statictoken.New(statictoken.Config{Namespace: "example", Credentials: map[string]statictoken.Credential{
 		"admin": {Name: "Administrator", TokenSHA256: digest},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	auth, err := httpauth.New(httpauth.Config{
-		ExternalURLs: []string{"https://tool.example.com"},
-		Session:      httpauth.SessionConfig{Keys: keys, TTL: 24 * time.Hour},
-	}, []httpauth.Method{method}, httpauth.Options{})
+		Origins: []string{"https://tool.example.com"},
+		Session: httpauth.SessionConfig{Keys: keys, TTL: 24 * time.Hour},
+	}, httpauth.WithMethods(method))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,119 +3,121 @@ package httpauth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+
+	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/internal/model"
+	internalsession "github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/internal/session"
 )
 
-type Config struct {
-	ExternalURLs []string      `json:"external-urls" desc:"Trusted browser origins"`
-	PathPrefix   string        `json:"path-prefix"   desc:"Authentication HTTP path prefix"`
-	Session      SessionConfig `json:"session"       desc:"Browser session configuration"`
-}
-
-type Options struct {
-	Authorizer Authorizer
-	Random     io.Reader
-	Now        func() time.Time
-}
-
 type Auth struct {
-	prefix     string
-	origins    trustedOrigins
-	codec      *sessionCodec
-	authorizer Authorizer
-	methods    []Method
-	byID       map[string]Method
+	prefix         string
+	origins        trustedOrigins
+	codec          *internalsession.Codec
+	authorizer     Authorizer
+	methods        []Method
+	infos          []MethodInfo
+	byID           map[string]Method
+	routes         http.Handler
+	cookieCleaners []func(http.ResponseWriter)
 }
 
-func (c Config) Validate() (Config, error) {
-	origins, err := parseTrustedOrigins(c.ExternalURLs)
-	if err != nil {
-		return c, err
+func New(config Config, options ...Option) (*Auth, error) {
+	runtime := authOptions{}
+	for index, option := range options {
+		if option == nil {
+			return nil, fmt.Errorf("httpauth: option %d is nil", index)
+		}
+		if err := option.apply(&runtime); err != nil {
+			return nil, fmt.Errorf("httpauth: apply option %d: %w", index, err)
+		}
 	}
-	c.PathPrefix = strings.TrimRight(strings.TrimSpace(c.PathPrefix), "/")
-	if c.PathPrefix == "" {
-		c.PathPrefix = "/auth"
-	}
-	if !strings.HasPrefix(c.PathPrefix, "/") || strings.ContainsAny(c.PathPrefix, "?#") {
-		return c, fmt.Errorf("%w: path prefix", ErrInvalidConfig)
-	}
-	for index, externalURL := range c.ExternalURLs {
-		c.ExternalURLs[index] = strings.TrimRight(strings.TrimSpace(externalURL), "/")
-	}
-	if _, err := newSessionCodec(c.Session, origins.secure, strings.NewReader(strings.Repeat("x", 64)), time.Now); err != nil {
-		return c, err
-	}
-	return c, nil
-}
-
-func New(config Config, methods []Method, options Options) (*Auth, error) {
-	config, err := config.Validate()
+	normalized, err := config.Normalize()
 	if err != nil {
 		return nil, err
 	}
-	origins, err := parseTrustedOrigins(config.ExternalURLs)
+	origins, err := parseTrustedOrigins(normalized.Origins)
 	if err != nil {
 		return nil, err
 	}
-	prefix := config.PathPrefix
-	codec, err := newSessionCodec(config.Session, origins.secure, options.Random, options.Now)
-	if err != nil {
-		return nil, err
-	}
-	if len(methods) == 0 {
+	if len(runtime.methods) == 0 {
 		return nil, fmt.Errorf("%w: authentication methods are required", ErrInvalidConfig)
 	}
-	byID := make(map[string]Method, len(methods))
-	for _, method := range methods {
+	if runtime.clock == nil {
+		runtime.clock = ClockFunc(time.Now)
+	}
+	codec, err := internalsession.New(normalized.Session, origins.Secure(), runtime.random, runtime.clock.Now)
+	if err != nil {
+		return nil, err
+	}
+	auth := &Auth{prefix: normalized.Prefix, origins: origins, codec: codec, authorizer: runtime.authorizer, methods: append([]Method(nil), runtime.methods...), byID: make(map[string]Method, len(runtime.methods))}
+	for _, method := range auth.methods {
 		if method == nil {
 			return nil, fmt.Errorf("%w: nil authentication method", ErrInvalidConfig)
 		}
 		info := method.Info()
-		if info.ID == "" || info.Label == "" || (info.Flow != LoginFlowRedirect && info.Flow != LoginFlowSecret) || strings.Contains(info.ID, "/") {
+		if info.ID == "" || info.Label == "" || (info.Flow != LoginFlowRedirect && info.Flow != LoginFlowSecret) || strings.ContainsAny(info.ID, "/?#") {
 			return nil, fmt.Errorf("%w: authentication method", ErrInvalidConfig)
 		}
-		if _, exists := byID[info.ID]; exists {
+		if _, exists := auth.byID[info.ID]; exists {
 			return nil, fmt.Errorf("%w: duplicate authentication method %q", ErrInvalidConfig, info.ID)
 		}
-		if binder, ok := method.(RouteBinder); ok {
-			if err := binder.BindRoutes(RouteConfig{PathPrefix: prefix, ExternalURLs: append([]string(nil), config.ExternalURLs...)}); err != nil {
-				return nil, fmt.Errorf("bind authentication method %q routes: %w", info.ID, err)
-			}
-		}
-		byID[info.ID] = method
+		auth.byID[info.ID], auth.infos = method, append(auth.infos, info)
 	}
-	return &Auth{prefix: prefix, origins: origins, codec: codec, authorizer: options.Authorizer, methods: append([]Method(nil), methods...), byID: byID}, nil
+	auth.routes, err = auth.buildHandler()
+	if err != nil {
+		return nil, err
+	}
+	return auth, nil
 }
 
-func (a *Auth) Handler() http.Handler {
+type boundIssuer struct {
+	auth   *Auth
+	method string
+}
+
+func (i boundIssuer) IssueSession(w http.ResponseWriter, session Session) error {
+	return i.auth.codec.Issue(w, i.method, session)
+}
+func (i boundIssuer) ExternalURL(r *http.Request) (*url.URL, bool) {
+	return i.auth.origins.ExternalURL(r)
+}
+func (i boundIssuer) Prefix() string { return i.auth.prefix }
+func (i boundIssuer) Secure() bool   { return i.auth.origins.Secure() }
+func (a *Auth) buildHandler() (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+a.prefix+"/session", a.session)
 	mux.HandleFunc("DELETE "+a.prefix+"/session", a.logout)
 	for _, method := range a.methods {
 		info := method.Info()
-		if info.Flow == LoginFlowSecret {
-			mux.Handle("POST "+a.prefix+"/login/"+info.ID, a.requireSameOrigin(method.LoginHandler(a)))
-		} else {
-			mux.Handle("GET "+a.prefix+"/login/"+info.ID, method.LoginHandler(a))
+		issuer := boundIssuer{auth: a, method: info.ID}
+		switch info.Flow {
+		case LoginFlowSecret:
+			login, ok := method.(LoginMethod)
+			if !ok {
+				return nil, fmt.Errorf("%w: method %q secret routes", ErrInvalidConfig, info.ID)
+			}
+			mux.Handle("POST "+a.prefix+"/login/"+info.ID, a.requireSameOrigin(login.LoginHandler(issuer)))
+		case LoginFlowRedirect:
+			redirect, ok := method.(RedirectMethod)
+			if !ok {
+				return nil, fmt.Errorf("%w: method %q redirect routes", ErrInvalidConfig, info.ID)
+			}
+			mux.Handle("GET "+a.prefix+"/login/"+info.ID, redirect.LoginHandler(issuer))
+			mux.Handle("GET "+a.prefix+"/callback/"+info.ID, redirect.CallbackHandler(issuer))
 		}
-		if callback, ok := method.(CallbackMethod); ok {
-			mux.Handle("GET "+a.prefix+"/callback/"+info.ID, callback.CallbackHandler(a))
+		if cleaner, ok := method.(CookieCleaner); ok {
+			a.cookieCleaners = append(a.cookieCleaners, cleaner.ClearCookies)
 		}
 	}
-	return noStore(mux)
+	return noStore(mux), nil
 }
-
-func (a *Auth) IssueSession(w http.ResponseWriter, session Session) error {
-	if _, exists := a.byID[session.Method]; !exists {
-		return ErrInvalidSession
-	}
-	return a.codec.issue(w, session)
-}
-
+func (a *Auth) Handler() http.Handler { return a.routes }
+func (a *Auth) Methods() []MethodInfo { return append([]MethodInfo(nil), a.infos...) }
 func (a *Auth) Authenticate(r *http.Request) (Authentication, error) {
 	if authorization := strings.TrimSpace(r.Header.Get("Authorization")); authorization != "" {
 		token, ok := bearerToken(authorization)
@@ -129,52 +131,65 @@ func (a *Auth) Authenticate(r *http.Request) (Authentication, error) {
 			}
 			session, err := bearer.AuthenticateBearer(r.Context(), token)
 			if err == nil {
-				return Authentication{Method: session.Method, Transport: TransportBearer, CredentialID: session.CredentialID, Principal: session.Principal}, nil
+				return Authentication{Method: method.Info().ID, Transport: TransportBearer, CredentialID: session.CredentialID, Principal: session.Principal}, nil
+			}
+			if !errors.Is(err, ErrUnauthenticated) {
+				return Authentication{}, err
 			}
 		}
 		return Authentication{}, ErrUnauthenticated
 	}
-	session, err := a.codec.read(r)
+	envelope, err := a.codec.Read(r)
 	if err != nil {
 		return Authentication{}, ErrUnauthenticated
 	}
-	method, exists := a.byID[session.Method]
+	method, exists := a.byID[envelope.Method]
 	if !exists {
 		return Authentication{}, ErrUnauthenticated
 	}
-	principal, err := method.ValidateSession(r.Context(), session)
+	principal, err := method.ValidateSession(r.Context(), envelope.Session)
 	if err != nil {
-		return Authentication{}, ErrUnauthenticated
+		return Authentication{}, err
 	}
-	return Authentication{Method: session.Method, Transport: TransportSession, CredentialID: session.CredentialID, Principal: principal}, nil
+	return Authentication{Method: envelope.Method, Transport: TransportSession, CredentialID: envelope.Session.CredentialID, Principal: principal}, nil
 }
-
 func (a *Auth) Authorize(ctx context.Context, authentication Authentication) error {
 	if a.authorizer == nil {
 		return nil
 	}
 	if err := a.authorizer.Authorize(ctx, authentication); err != nil {
-		return fmt.Errorf("%w: %v", ErrForbidden, err)
+		return fmt.Errorf("%w: %w", ErrForbidden, err)
 	}
 	return nil
 }
-
-func (a *Auth) RequireAccess(next http.Handler) http.Handler {
+func (a *Auth) RequireAuthenticated(next http.Handler) http.Handler { return a.require(next, false) }
+func (a *Auth) RequireAccess(next http.Handler) http.Handler        { return a.require(next, true) }
+func (a *Auth) require(next http.Handler, authorize bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authentication, err := a.Authenticate(r)
 		if err != nil {
+			if strings.TrimSpace(r.Header.Get("Authorization")) != "" && !errors.Is(err, ErrUnauthenticated) {
+				WriteError(w, http.StatusServiceUnavailable, "authentication_unavailable", "Authentication unavailable")
+				return
+			}
 			WriteError(w, http.StatusUnauthorized, "authentication_required", "Authentication required")
 			return
 		}
-		if a.Authorize(r.Context(), authentication) != nil {
-			WriteError(w, http.StatusForbidden, "access_forbidden", "Access forbidden")
-			return
-		}
-		if authentication.Transport == TransportSession && isUnsafeMethod(r.Method) && !a.origins.sameOrigin(r) {
+		if authentication.Transport == TransportSession && isUnsafeMethod(r.Method) && !a.origins.SameOrigin(r) {
 			WriteError(w, http.StatusForbidden, "invalid_origin", "Invalid request origin")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(contextWithAuthentication(r.Context(), authentication)))
+		if authorize {
+			if err := a.Authorize(r.Context(), authentication); err != nil {
+				if errors.Is(err, ErrForbidden) {
+					WriteError(w, http.StatusForbidden, "access_forbidden", "Access forbidden")
+				} else {
+					WriteError(w, http.StatusServiceUnavailable, "authorization_unavailable", "Authorization unavailable")
+				}
+				return
+			}
+		}
+		next.ServeHTTP(w, r.WithContext(model.ContextWithAuthentication(r.Context(), authentication)))
 	})
 }
 
@@ -197,7 +212,7 @@ type SessionResponse struct {
 }
 
 func (a *Auth) session(w http.ResponseWriter, r *http.Request) {
-	response := SessionResponse{Status: SessionStatusSignedOut, Methods: a.methodInfos()}
+	response := SessionResponse{Status: SessionStatusSignedOut, Methods: a.Methods()}
 	authentication, err := a.Authenticate(r)
 	if err != nil {
 		if strings.TrimSpace(r.Header.Get("Authorization")) != "" {
@@ -207,61 +222,42 @@ func (a *Auth) session(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, response)
 		return
 	}
-	access := AccessStatusGranted
-	if a.Authorize(r.Context(), authentication) != nil {
-		access = AccessStatusDenied
+	response.Status, response.Method, response.Identity, response.Access = SessionStatusAuthenticated, authentication.Method, &authentication.Principal, AccessStatusGranted
+	if err := a.Authorize(r.Context(), authentication); err != nil {
+		response.Access = AccessStatusDenied
 	}
-	response.Status = SessionStatusAuthenticated
-	response.Method = authentication.Method
-	response.Access = access
-	response.Identity = &authentication.Principal
 	writeJSON(w, http.StatusOK, response)
 }
-
 func (a *Auth) logout(w http.ResponseWriter, r *http.Request) {
-	if !a.origins.sameOrigin(r) {
+	if !a.origins.SameOrigin(r) {
 		WriteError(w, http.StatusForbidden, "invalid_origin", "Invalid request origin")
 		return
 	}
-	a.codec.clear(w)
-	for _, method := range a.methods {
-		if cleaner, ok := method.(CookieCleaner); ok {
-			cleaner.ClearCookies(w)
-		}
+	a.codec.Clear(w)
+	for _, cleaner := range a.cookieCleaners {
+		cleaner(w)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
 func (a *Auth) requireSameOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !a.origins.sameOrigin(r) {
+		if !a.origins.SameOrigin(r) {
 			WriteError(w, http.StatusForbidden, "invalid_origin", "Invalid request origin")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
-
-func (a *Auth) methodInfos() []MethodInfo {
-	infos := make([]MethodInfo, len(a.methods))
-	for index, method := range a.methods {
-		infos[index] = method.Info()
-	}
-	return infos
-}
-
 func bearerToken(value string) (string, bool) {
 	scheme, token, found := strings.Cut(value, " ")
 	return token, found && strings.EqualFold(scheme, "Bearer") && token != "" && !strings.ContainsAny(token, " \t\r\n")
 }
-
 func noStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
 }
-
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

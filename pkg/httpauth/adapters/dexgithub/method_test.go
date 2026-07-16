@@ -9,8 +9,8 @@ import (
 	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
 )
 
-func TestMapperAndUsernameAuthorizer(t *testing.T) {
-	principal, err := (Mapper{}).MapIdentity(t.Context(), json.RawMessage(`{
+func TestMapClaimsAndUsernameAuthorizer(t *testing.T) {
+	principal, err := mapClaims(json.RawMessage(`{
 		"sub":"dex-subject","preferred_username":"LwMacct","name":"User",
 		"federated_claims":{"connector_id":"github","user_id":"42"}
 	}`))
@@ -33,8 +33,8 @@ func TestMapperAndUsernameAuthorizer(t *testing.T) {
 	}
 }
 
-func TestMapperRejectsNonGitHubIdentity(t *testing.T) {
-	_, err := (Mapper{}).MapIdentity(t.Context(), json.RawMessage(`{
+func TestMapClaimsRejectsNonGitHubIdentity(t *testing.T) {
+	_, err := mapClaims(json.RawMessage(`{
 		"sub":"subject","preferred_username":"user",
 		"federated_claims":{"connector_id":"ldap","user_id":"42"}
 	}`))
