@@ -103,16 +103,6 @@ mux.Handle(auth.PathPrefix()+"/", auth.Handler())
 mux.Handle("/api/", auth.RequireAccess(api))
 ```
 
-AuthMe 不会强制使用全局 logger。`WithLogger` 接口可供集成方保留统一配置，但 AuthMe
-自身将请求错误通过返回值和 HTTP 响应传递，不会把普通认证/授权失败写入 logger：
-
-```go
-auth, err := authme.New(config,
-    authme.WithMethods(tokenMethod),
-    authme.WithLogger(slog.Default()),
-)
-```
-
 Session key 是 base64url 编码的 32 字节随机值，可使用以下命令生成：
 
 ```bash

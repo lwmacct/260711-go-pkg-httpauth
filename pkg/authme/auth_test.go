@@ -1,12 +1,10 @@
 package authme_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -165,36 +163,6 @@ func TestUnsafeSessionRequestRequiresTrustedOrigin(t *testing.T) {
 	}
 }
 
-func TestWithLoggerDoesNotLogBearerFailure(t *testing.T) {
-	var output bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&output, nil))
-	auth := newTestAuthWithOptions(t, failingBearerMethod{err: errors.New("credential backend unavailable")}, authme.WithLogger(logger))
-
-	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/api/resource", nil)
-	request.Header.Set("Authorization", "Bearer opaque-token")
-	if _, err := auth.Authenticate(request); err == nil {
-		t.Fatal("unexpected bearer failure was ignored")
-	}
-	if output.Len() != 0 {
-		t.Fatalf("request error was logged: %s", output.String())
-	}
-}
-
-func TestWithLoggerDoesNotRecordRejectedBearer(t *testing.T) {
-	var output bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&output, nil))
-	auth := newTestAuthWithOptions(t, failingBearerMethod{err: authme.ErrUnauthenticated}, authme.WithLogger(logger))
-
-	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/api/resource", nil)
-	request.Header.Set("Authorization", "Bearer invalid-token")
-	if _, err := auth.Authenticate(request); !errors.Is(err, authme.ErrUnauthenticated) {
-		t.Fatalf("unexpected authentication error: %v", err)
-	}
-	if output.Len() != 0 {
-		t.Fatalf("invalid credential was logged: %s", output.String())
-	}
-}
-
 func TestRequireAccessDistinguishesDenialFromAuthorizerFailure(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -207,10 +175,8 @@ func TestRequireAccessDistinguishesDenialFromAuthorizerFailure(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var output bytes.Buffer
-			logger := slog.New(slog.NewJSONHandler(&output, nil))
 			authorizer := authme.AuthorizerFunc(func(context.Context, authme.Authentication) error { return test.err })
-			auth := newTestAuthWithOptions(t, newTokenMethod(t), authme.WithAuthorizer(authorizer), authme.WithLogger(logger))
+			auth := newTestAuthWithOptions(t, newTokenMethod(t), authme.WithAuthorizer(authorizer))
 
 			request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/api/resource", nil)
 			request.Header.Set("Authorization", "Bearer "+testToken)
@@ -221,32 +187,8 @@ func TestRequireAccessDistinguishesDenialFromAuthorizerFailure(t *testing.T) {
 			if recorder.Code != test.status || !strings.Contains(recorder.Body.String(), `"code":"`+test.code+`"`) {
 				t.Fatalf("unexpected response: status=%d body=%q", recorder.Code, recorder.Body.String())
 			}
-			if test.name == "denied" && output.Len() != 0 {
-				t.Fatalf("expected denial was logged: %s", output.String())
-			}
-			if output.Len() != 0 {
-				t.Fatalf("authorization error was logged: %s", output.String())
-			}
 		})
 	}
-}
-
-type failingBearerMethod struct{ err error }
-
-func (f failingBearerMethod) Info() authme.MethodInfo {
-	return authme.MethodInfo{ID: "failing", Flow: authme.LoginFlowSecret, Label: "Failing"}
-}
-
-func (f failingBearerMethod) LoginHandler(authme.SessionIssuer) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-}
-
-func (f failingBearerMethod) AuthenticateBearer(context.Context, string) (authme.Session, error) {
-	return authme.Session{}, f.err
-}
-
-func (f failingBearerMethod) ValidateSession(context.Context, authme.Session) (authme.Principal, error) {
-	return authme.Principal{}, authme.ErrUnauthenticated
 }
 
 func newTestAuth(t *testing.T, token string) *authme.Auth {

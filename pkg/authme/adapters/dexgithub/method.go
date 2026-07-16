@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,7 +20,6 @@ import (
 type Option interface{ apply(*options) error }
 type options struct {
 	httpClient *http.Client
-	logger     *slog.Logger
 	random     io.Reader
 	now        func() time.Time
 }
@@ -30,9 +28,6 @@ type optionFunc func(*options) error
 func (f optionFunc) apply(value *options) error { return f(value) }
 func WithHTTPClient(client *http.Client) Option {
 	return optionFunc(func(value *options) error { value.httpClient = client; return nil })
-}
-func WithLogger(logger *slog.Logger) Option {
-	return optionFunc(func(value *options) error { value.logger = logger; return nil })
 }
 func WithRandom(random io.Reader) Option {
 	return optionFunc(func(value *options) error { value.random = random; return nil })
@@ -64,9 +59,6 @@ func New(ctx context.Context, config Config, opts ...Option) (*Method, error) {
 	}
 	if runtime.httpClient == nil {
 		runtime.httpClient = http.DefaultClient
-	}
-	if runtime.logger == nil {
-		runtime.logger = slog.Default()
 	}
 	if runtime.random == nil {
 		runtime.random = rand.Reader
