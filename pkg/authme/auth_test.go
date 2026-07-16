@@ -15,12 +15,44 @@ import (
 
 var testToken = "test-token/with.punctuation~1"
 
+func TestDefaultPathPrefix(t *testing.T) {
+	auth := newTestAuth(t, testToken)
+	if auth.PathPrefix() != "/authme" {
+		t.Fatalf("unexpected default path prefix: %q", auth.PathPrefix())
+	}
+}
+
+func TestCustomPathPrefix(t *testing.T) {
+	method, err := statictoken.New(statictoken.Config{Credentials: []statictoken.Credential{
+		{ID: "admin", Name: "Administrator", Token: testToken},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, err := authme.New(authme.Config{
+		Prefix:  "/custom-auth",
+		Origins: []string{"https://tool.example.com"},
+		Session: authme.SessionConfig{Keys: []authme.SessionKey{testKey("primary", 1)}, TTL: 24 * time.Hour},
+	}, authme.WithMethods(method))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auth.PathPrefix() != "/custom-auth" {
+		t.Fatalf("unexpected custom path prefix: %q", auth.PathPrefix())
+	}
+	recorder := httptest.NewRecorder()
+	auth.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "https://tool.example.com/custom-auth/session", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("custom path prefix was not routed: %d", recorder.Code)
+	}
+}
+
 func TestTokenSessionLifecycle(t *testing.T) {
 	auth := newTestAuth(t, testToken)
 	handler := auth.Handler()
 
 	login := httptest.NewRecorder()
-	loginRequest := httptest.NewRequest(http.MethodPost, "https://tool.example.com/auth/login/token", strings.NewReader(`{"token":"`+testToken+`"}`))
+	loginRequest := httptest.NewRequest(http.MethodPost, "https://tool.example.com/authme/login/token", strings.NewReader(`{"token":"`+testToken+`"}`))
 	loginRequest.Header.Set("Content-Type", "application/json")
 	loginRequest.Header.Set("Origin", "https://tool.example.com")
 	handler.ServeHTTP(login, loginRequest)
@@ -33,7 +65,7 @@ func TestTokenSessionLifecycle(t *testing.T) {
 	}
 
 	session := httptest.NewRecorder()
-	sessionRequest := httptest.NewRequest(http.MethodGet, "https://tool.example.com/auth/session", nil)
+	sessionRequest := httptest.NewRequest(http.MethodGet, "https://tool.example.com/authme/session", nil)
 	sessionRequest.AddCookie(cookie)
 	handler.ServeHTTP(session, sessionRequest)
 	var response authme.SessionResponse
@@ -45,7 +77,7 @@ func TestTokenSessionLifecycle(t *testing.T) {
 	}
 
 	logout := httptest.NewRecorder()
-	logoutRequest := httptest.NewRequest(http.MethodDelete, "https://tool.example.com/auth/session", nil)
+	logoutRequest := httptest.NewRequest(http.MethodDelete, "https://tool.example.com/authme/session", nil)
 	logoutRequest.Header.Set("Origin", "https://tool.example.com")
 	logoutRequest.AddCookie(cookie)
 	handler.ServeHTTP(logout, logoutRequest)
@@ -75,7 +107,7 @@ func TestSessionRevokedWhenTokenChanges(t *testing.T) {
 	cookie := loginCookie(t, first, testToken)
 	second := newTestAuth(t, "rotated-token")
 
-	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/auth/session", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/authme/session", nil)
 	request.AddCookie(cookie)
 	recorder := httptest.NewRecorder()
 	second.Handler().ServeHTTP(recorder, request)
@@ -95,7 +127,7 @@ func TestSessionKeyRotation(t *testing.T) {
 	cookie := loginCookie(t, oldAuth, testToken)
 	rotated := newTestAuthWithKeys(t, testToken, []authme.SessionKey{newKey, oldKey})
 
-	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/auth/session", nil)
+	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/authme/session", nil)
 	request.AddCookie(cookie)
 	recorder := httptest.NewRecorder()
 	rotated.Handler().ServeHTTP(recorder, request)
@@ -143,7 +175,7 @@ func newTestAuthWithKeys(t *testing.T, token string, keys []authme.SessionKey) *
 
 func loginCookie(t *testing.T, auth *authme.Auth, token string) *http.Cookie {
 	t.Helper()
-	request := httptest.NewRequest(http.MethodPost, "https://tool.example.com/auth/login/token", strings.NewReader(`{"token":"`+token+`"}`))
+	request := httptest.NewRequest(http.MethodPost, "https://tool.example.com/authme/login/token", strings.NewReader(`{"token":"`+token+`"}`))
 	request.Header.Set("Origin", "https://tool.example.com")
 	recorder := httptest.NewRecorder()
 	auth.Handler().ServeHTTP(recorder, request)

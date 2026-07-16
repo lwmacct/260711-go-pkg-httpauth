@@ -15,14 +15,14 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{Prefix: "/auth", Session: SessionConfig{TTL: 24 * time.Hour}}
+	return Config{Prefix: "/authme", Session: SessionConfig{TTL: 24 * time.Hour}}
 }
 
 func (c Config) Normalize() (Config, error) {
 	c.Origins = append([]string(nil), c.Origins...)
 	c.Prefix = strings.TrimRight(strings.TrimSpace(c.Prefix), "/")
 	if c.Prefix == "" {
-		c.Prefix = "/auth"
+		c.Prefix = "/authme"
 	}
 	for index, origin := range c.Origins {
 		c.Origins[index] = strings.TrimRight(strings.TrimSpace(origin), "/")

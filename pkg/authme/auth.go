@@ -118,6 +118,7 @@ func (a *Auth) buildHandler() (http.Handler, error) {
 }
 func (a *Auth) Handler() http.Handler { return a.routes }
 func (a *Auth) Methods() []MethodInfo { return append([]MethodInfo(nil), a.infos...) }
+func (a *Auth) PathPrefix() string    { return a.prefix }
 func (a *Auth) Authenticate(r *http.Request) (Authentication, error) {
 	if authorization := strings.TrimSpace(r.Header.Get("Authorization")); authorization != "" {
 		token, ok := bearerToken(authorization)

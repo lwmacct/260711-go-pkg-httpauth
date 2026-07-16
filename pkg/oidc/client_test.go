@@ -21,7 +21,7 @@ func TestClientFlowAndExchange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	flow, err := client.NewFlow("https://tool.example.com/auth/callback/github")
+	flow, err := client.NewFlow("https://tool.example.com/authme/callback/github")
 	if err != nil {
 		t.Fatal(err)
 	}

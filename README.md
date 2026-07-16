@@ -6,17 +6,17 @@ Session API。
 
 ## HTTP API
 
-默认挂载路径为 `/auth`：
+默认挂载路径为 `/authme`：
 
 ```text
-GET    /auth/session
-DELETE /auth/session
-POST   /auth/login/token
-GET    /auth/login/github
-GET    /auth/callback/github
+GET    /authme/session
+DELETE /authme/session
+POST   /authme/login/token
+GET    /authme/login/github
+GET    /authme/callback/github
 ```
 
-`GET /auth/session` 将当前认证状态与可用登录方式合并为一个响应：
+`GET /authme/session` 将当前认证状态与可用登录方式合并为一个响应：
 
 ```json
 {
@@ -60,7 +60,7 @@ import (
 
 tokenMethod, err := statictoken.New(statictoken.Config{
 	Credentials: []statictoken.Credential{
-		{ID: "admin", Name: "Administrator", Token: os.Getenv("AUTH_TOKEN")},
+		{ID: "admin", Name: "Administrator", Token: os.Getenv("AUTHME_ACCESS_TOKEN")},
 	},
 })
 if err != nil {
@@ -88,7 +88,7 @@ auth, err := authme.New(authme.Config{
 	Session: authme.SessionConfig{
 		TTL: 24 * time.Hour,
 		Keys: []authme.SessionKey{
-			{ID: "2026-07", Secret: os.Getenv("AUTH_SESSION_KEY")},
+			{ID: "2026-07", Secret: os.Getenv("AUTHME_SESSION_KEY")},
 		},
 	},
 }, authme.WithMethods(tokenMethod, githubMethod), authme.WithAuthorizer(githubUsers))
@@ -97,7 +97,7 @@ if err != nil {
 }
 
 mux := http.NewServeMux()
-mux.Handle("/auth/", auth.Handler())
+mux.Handle(auth.PathPrefix()+"/", auth.Handler())
 mux.Handle("/api/", auth.RequireAccess(api))
 ```
 
@@ -129,7 +129,7 @@ openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 OIDC provider 必须注册由 method ID 派生的 callback，例如：
 
 ```text
-https://tool.example.com/auth/callback/github
+https://tool.example.com/authme/callback/github
 ```
 
 `pkg/oidc` 是不依赖 `authme` 的协议包，负责 discovery、PKCE、nonce、code exchange
