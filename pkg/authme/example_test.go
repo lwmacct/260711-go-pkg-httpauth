@@ -16,7 +16,7 @@ func Example() {
 	if sessionKey == "" {
 		sessionKey = base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("k", 32)))
 	}
-	tokenMethod, _ := statictoken.New(statictoken.Config{Credentials: []statictoken.Credential{
+	tokenMethod, _ := statictoken.New(statictoken.Config{Enabled: true, Credentials: []statictoken.Credential{
 		{ID: "admin", Name: "Administrator", Token: "example-access-token"},
 	}})
 	auth, _ := authme.New(authme.Config{

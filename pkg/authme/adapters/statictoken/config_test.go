@@ -1,9 +1,23 @@
 package statictoken
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+func TestEnabledIsApplicationSwitch(t *testing.T) {
+	config := DefaultConfig()
+	if config.Enabled {
+		t.Fatal("static token auth is enabled by default")
+	}
+	if err := json.Unmarshal([]byte(`{"enabled":true}`), &config); err != nil {
+		t.Fatal(err)
+	}
+	if !config.Enabled {
+		t.Fatal("static token enabled flag was not decoded")
+	}
+}
 
 func TestOpaqueTokenAuth(t *testing.T) {
 	token := "opaque-token/with.punctuation~1"

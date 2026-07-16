@@ -24,6 +24,7 @@ type Credential struct {
 // Config contains file- and CLI-friendly static token settings. Runtime
 // authentication uses a private map built by New.
 type Config struct {
+	Enabled     bool         `json:"enabled" desc:"Whether to enable static token authentication"`
 	ID          string       `json:"id" desc:"Authentication method ID"`
 	Label       string       `json:"label" desc:"Authentication method display label"`
 	Credentials []Credential `json:"credentials" desc:"Static access token credentials"`

@@ -9,6 +9,19 @@ import (
 	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme"
 )
 
+func TestEnabledIsApplicationSwitch(t *testing.T) {
+	config := DefaultConfig()
+	if config.Enabled {
+		t.Fatal("Dex GitHub auth is enabled by default")
+	}
+	if err := json.Unmarshal([]byte(`{"enabled":true}`), &config); err != nil {
+		t.Fatal(err)
+	}
+	if !config.Enabled {
+		t.Fatal("Dex GitHub enabled flag was not decoded")
+	}
+}
+
 func TestMapClaimsAndUsernameAuthorizer(t *testing.T) {
 	principal, err := mapClaims(json.RawMessage(`{
 		"sub":"dex-subject","preferred_username":"LwMacct","name":"User",

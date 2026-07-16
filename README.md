@@ -2,7 +2,7 @@
 
 `pkg/authme` 为 Go HTTP 服务提供统一的浏览器 Session、Bearer 认证、登录方式发现、
 授权中间件和认证路由。静态 token 与 OIDC 是可组合的认证驱动，应用只暴露一套
-Session API。
+Session API。每个认证 adapter 的 `enabled` 字段由调用方决定是否启用；未启用的 adapter 不会初始化或校验。
 
 ## HTTP API
 
@@ -59,6 +59,7 @@ import (
 )
 
 tokenMethod, err := statictoken.New(statictoken.Config{
+	Enabled: true,
 	Credentials: []statictoken.Credential{
 		{ID: "admin", Name: "Administrator", Token: os.Getenv("AUTHME_ACCESS_TOKEN")},
 	},
@@ -68,6 +69,7 @@ if err != nil {
 }
 
 githubMethod, err := dexgithub.New(ctx, dexgithub.Config{
+	Enabled: true,
 	ID:         "github",
 	Label:      "GitHub",
 	Issuer:     "https://dex.example.com",

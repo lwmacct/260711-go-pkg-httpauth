@@ -11,6 +11,7 @@ import (
 var ErrInvalidConfig = errors.New("invalid Dex GitHub config")
 
 type Config struct {
+	Enabled      bool          `json:"enabled" desc:"Whether to enable Dex GitHub authentication"`
 	ID           string        `json:"id" desc:"Authentication method ID"`
 	Label        string        `json:"label" desc:"Authentication method display label"`
 	Issuer       string        `json:"issuer" desc:"Dex OIDC issuer URL"`
