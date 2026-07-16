@@ -3,6 +3,7 @@ package authme
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -52,6 +53,7 @@ type authOptions struct {
 	authorizer Authorizer
 	random     io.Reader
 	clock      Clock
+	logger     *slog.Logger
 }
 type optionFunc func(*authOptions) error
 
@@ -68,4 +70,10 @@ func WithRandom(random io.Reader) Option {
 }
 func WithClock(clock Clock) Option {
 	return optionFunc(func(options *authOptions) error { options.clock = clock; return nil })
+}
+
+// WithLogger supplies the logger used for unexpected authentication and
+// authorization failures. Invalid credentials are not logged.
+func WithLogger(logger *slog.Logger) Option {
+	return optionFunc(func(options *authOptions) error { options.logger = logger; return nil })
 }

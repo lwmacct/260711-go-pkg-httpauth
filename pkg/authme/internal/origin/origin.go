@@ -17,25 +17,30 @@ func Parse(values []string) (Origins, error) {
 	if len(values) == 0 {
 		return result, fmt.Errorf("trusted origins are required")
 	}
+	var firstOrigin string
 	for index, value := range values {
 		value = strings.TrimRight(strings.TrimSpace(value), "/")
 		parsed, err := url.Parse(value)
-		if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" {
-			return result, fmt.Errorf("invalid trusted origin")
+		if err != nil {
+			return result, fmt.Errorf("invalid trusted origin[%d] %q: %w", index, value, err)
+		}
+		if parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" {
+			return result, fmt.Errorf("invalid trusted origin[%d] %q", index, value)
 		}
 		secure := parsed.Scheme == "https"
 		loopback := parsed.Scheme == "http" && (parsed.Hostname() == "localhost" || parsed.Hostname() == "127.0.0.1" || parsed.Hostname() == "::1")
 		if !secure && !loopback {
-			return result, fmt.Errorf("trusted origin must use HTTPS except on loopback")
+			return result, fmt.Errorf("trusted origin[%d] %q must use HTTPS except on loopback", index, value)
 		}
 		if index == 0 {
 			result.secure = secure
+			firstOrigin = value
 		} else if result.secure != secure {
-			return result, fmt.Errorf("trusted origins must use the same scheme")
+			return result, fmt.Errorf("trusted origins must use one scheme: origin[%d]=%q conflicts with origin[0]=%q", index, value, firstOrigin)
 		}
 		host := strings.ToLower(parsed.Host)
 		if _, exists := result.values[host]; exists {
-			return result, fmt.Errorf("duplicate trusted origin host")
+			return result, fmt.Errorf("duplicate trusted origin[%d] host %q", index, parsed.Host)
 		}
 		result.values[host] = parsed
 	}

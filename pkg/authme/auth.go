@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -24,6 +25,7 @@ type Auth struct {
 	byID           map[string]Method
 	routes         http.Handler
 	cookieCleaners []func(http.ResponseWriter)
+	logger         *slog.Logger
 }
 
 func New(config Config, options ...Option) (*Auth, error) {
@@ -50,11 +52,14 @@ func New(config Config, options ...Option) (*Auth, error) {
 	if runtime.clock == nil {
 		runtime.clock = ClockFunc(time.Now)
 	}
+	if runtime.logger == nil {
+		runtime.logger = slog.Default()
+	}
 	codec, err := session.New(normalized.Session, origins.Secure(), runtime.random, runtime.clock.Now)
 	if err != nil {
 		return nil, err
 	}
-	auth := &Auth{prefix: normalized.Prefix, origins: origins, codec: codec, authorizer: runtime.authorizer, methods: append([]Method(nil), runtime.methods...), byID: make(map[string]Method, len(runtime.methods))}
+	auth := &Auth{prefix: normalized.Prefix, origins: origins, codec: codec, authorizer: runtime.authorizer, methods: append([]Method(nil), runtime.methods...), byID: make(map[string]Method, len(runtime.methods)), logger: runtime.logger}
 	for _, method := range auth.methods {
 		if method == nil {
 			return nil, fmt.Errorf("%w: nil authentication method", ErrInvalidConfig)
@@ -135,6 +140,7 @@ func (a *Auth) Authenticate(r *http.Request) (Authentication, error) {
 				return Authentication{Method: method.Info().ID, Transport: TransportBearer, CredentialID: session.CredentialID, Principal: session.Principal}, nil
 			}
 			if !errors.Is(err, ErrUnauthenticated) {
+				a.logger.Error("authentication method failed", "method", method.Info().ID, "error", err)
 				return Authentication{}, err
 			}
 		}
@@ -159,6 +165,9 @@ func (a *Auth) Authorize(ctx context.Context, authentication Authentication) err
 		return nil
 	}
 	if err := a.authorizer.Authorize(ctx, authentication); err != nil {
+		if !errors.Is(err, ErrForbidden) {
+			a.logger.Error("authorization failed", "method", authentication.Method, "error", err)
+		}
 		return fmt.Errorf("%w: %w", ErrForbidden, err)
 	}
 	return nil

@@ -12,7 +12,7 @@ type trustedOrigins = internalorigin.Origins
 func parseTrustedOrigins(values []string) (trustedOrigins, error) {
 	parsed, err := internalorigin.Parse(values)
 	if err != nil {
-		return parsed, fmt.Errorf("%w: %v", ErrInvalidConfig, err)
+		return parsed, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
 	}
 	return parsed, nil
 }

@@ -1,8 +1,12 @@
 package authme_test
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -161,6 +165,55 @@ func TestUnsafeSessionRequestRequiresTrustedOrigin(t *testing.T) {
 	}
 }
 
+func TestWithLoggerRecordsUnexpectedBearerFailure(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	auth := newTestAuthWithOptions(t, failingBearerMethod{err: errors.New("credential backend unavailable")}, authme.WithLogger(logger))
+
+	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/api/resource", nil)
+	request.Header.Set("Authorization", "Bearer opaque-token")
+	if _, err := auth.Authenticate(request); err == nil {
+		t.Fatal("unexpected bearer failure was ignored")
+	}
+	message := output.String()
+	if !strings.Contains(message, `"msg":"authentication method failed"`) || !strings.Contains(message, `"method":"failing"`) || !strings.Contains(message, `"error":"credential backend unavailable"`) {
+		t.Fatalf("unexpected log output: %s", message)
+	}
+}
+
+func TestWithLoggerDoesNotRecordRejectedBearer(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	auth := newTestAuthWithOptions(t, failingBearerMethod{err: authme.ErrUnauthenticated}, authme.WithLogger(logger))
+
+	request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/api/resource", nil)
+	request.Header.Set("Authorization", "Bearer invalid-token")
+	if _, err := auth.Authenticate(request); !errors.Is(err, authme.ErrUnauthenticated) {
+		t.Fatalf("unexpected authentication error: %v", err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("invalid credential was logged: %s", output.String())
+	}
+}
+
+type failingBearerMethod struct{ err error }
+
+func (f failingBearerMethod) Info() authme.MethodInfo {
+	return authme.MethodInfo{ID: "failing", Flow: authme.LoginFlowSecret, Label: "Failing"}
+}
+
+func (f failingBearerMethod) LoginHandler(authme.SessionIssuer) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+}
+
+func (f failingBearerMethod) AuthenticateBearer(context.Context, string) (authme.Session, error) {
+	return authme.Session{}, f.err
+}
+
+func (f failingBearerMethod) ValidateSession(context.Context, authme.Session) (authme.Principal, error) {
+	return authme.Principal{}, authme.ErrUnauthenticated
+}
+
 func newTestAuth(t *testing.T, token string) *authme.Auth {
 	t.Helper()
 	return newTestAuthWithKeys(t, token, []authme.SessionKey{testKey("primary", 1)})
@@ -178,6 +231,19 @@ func newTestAuthWithKeys(t *testing.T, token string, keys []authme.SessionKey) *
 		Origins: []string{"https://tool.example.com"},
 		Session: authme.SessionConfig{Keys: keys, TTL: 24 * time.Hour},
 	}, authme.WithMethods(method))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return auth
+}
+
+func newTestAuthWithOptions(t *testing.T, method authme.Method, options ...authme.Option) *authme.Auth {
+	t.Helper()
+	options = append([]authme.Option{authme.WithMethods(method)}, options...)
+	auth, err := authme.New(authme.Config{
+		Origins: []string{"https://tool.example.com"},
+		Session: authme.SessionConfig{Keys: []authme.SessionKey{testKey("primary", 1)}, TTL: 24 * time.Hour},
+	}, options...)
 	if err != nil {
 		t.Fatal(err)
 	}
