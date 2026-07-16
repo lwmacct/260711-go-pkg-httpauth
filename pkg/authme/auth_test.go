@@ -196,6 +196,42 @@ func TestWithLoggerDoesNotRecordRejectedBearer(t *testing.T) {
 	}
 }
 
+func TestRequireAccessDistinguishesDenialFromAuthorizerFailure(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "denied", err: authme.ErrForbidden, status: http.StatusForbidden, code: "access_forbidden"},
+		{name: "unavailable", err: errors.New("policy backend unavailable"), status: http.StatusServiceUnavailable, code: "authorization_unavailable"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			logger := slog.New(slog.NewJSONHandler(&output, nil))
+			authorizer := authme.AuthorizerFunc(func(context.Context, authme.Authentication) error { return test.err })
+			auth := newTestAuthWithOptions(t, newTokenMethod(t), authme.WithAuthorizer(authorizer), authme.WithLogger(logger))
+
+			request := httptest.NewRequest(http.MethodGet, "https://tool.example.com/api/resource", nil)
+			request.Header.Set("Authorization", "Bearer "+testToken)
+			recorder := httptest.NewRecorder()
+			auth.RequireAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			})).ServeHTTP(recorder, request)
+			if recorder.Code != test.status || !strings.Contains(recorder.Body.String(), `"code":"`+test.code+`"`) {
+				t.Fatalf("unexpected response: status=%d body=%q", recorder.Code, recorder.Body.String())
+			}
+			if test.name == "denied" && output.Len() != 0 {
+				t.Fatalf("expected denial was logged: %s", output.String())
+			}
+			if test.name == "unavailable" && !strings.Contains(output.String(), `"msg":"authorization failed"`) {
+				t.Fatalf("authorizer failure was not logged: %s", output.String())
+			}
+		})
+	}
+}
+
 type failingBearerMethod struct{ err error }
 
 func (f failingBearerMethod) Info() authme.MethodInfo {
@@ -221,9 +257,7 @@ func newTestAuth(t *testing.T, token string) *authme.Auth {
 
 func newTestAuthWithKeys(t *testing.T, token string, keys []authme.SessionKey) *authme.Auth {
 	t.Helper()
-	method, err := statictoken.New(statictoken.Config{Credentials: []statictoken.Credential{
-		{ID: "admin", Name: "Administrator", Token: token},
-	}})
+	method, err := statictoken.New(statictoken.Config{Credentials: []statictoken.Credential{{ID: "admin", Name: "Administrator", Token: token}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,6 +269,15 @@ func newTestAuthWithKeys(t *testing.T, token string, keys []authme.SessionKey) *
 		t.Fatal(err)
 	}
 	return auth
+}
+
+func newTokenMethod(t *testing.T) authme.Method {
+	t.Helper()
+	method, err := statictoken.New(statictoken.Config{Credentials: []statictoken.Credential{{ID: "admin", Name: "Administrator", Token: testToken}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return method
 }
 
 func newTestAuthWithOptions(t *testing.T, method authme.Method, options ...authme.Option) *authme.Auth {

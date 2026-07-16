@@ -86,7 +86,11 @@ type boundIssuer struct {
 }
 
 func (i boundIssuer) IssueSession(w http.ResponseWriter, session Session) error {
-	return i.auth.codec.Issue(w, i.method, session)
+	if err := i.auth.codec.Issue(w, i.method, session); err != nil {
+		i.auth.logger.Error("issue session failed", "method", i.method, "error", err)
+		return err
+	}
+	return nil
 }
 func (i boundIssuer) ExternalURL(r *http.Request) (*url.URL, bool) {
 	return i.auth.origins.ExternalURL(r)
@@ -156,6 +160,9 @@ func (a *Auth) Authenticate(r *http.Request) (Authentication, error) {
 	}
 	principal, err := method.ValidateSession(r.Context(), envelope.Session)
 	if err != nil {
+		if !errors.Is(err, ErrUnauthenticated) {
+			a.logger.Error("session validation failed", "method", envelope.Method, "error", err)
+		}
 		return Authentication{}, err
 	}
 	return Authentication{Method: envelope.Method, Transport: TransportSession, CredentialID: envelope.Session.CredentialID, Principal: principal}, nil
@@ -165,10 +172,11 @@ func (a *Auth) Authorize(ctx context.Context, authentication Authentication) err
 		return nil
 	}
 	if err := a.authorizer.Authorize(ctx, authentication); err != nil {
-		if !errors.Is(err, ErrForbidden) {
-			a.logger.Error("authorization failed", "method", authentication.Method, "error", err)
+		if errors.Is(err, ErrForbidden) {
+			return err
 		}
-		return fmt.Errorf("%w: %w", ErrForbidden, err)
+		a.logger.Error("authorization failed", "method", authentication.Method, "error", err)
+		return err
 	}
 	return nil
 }

@@ -103,6 +103,16 @@ mux.Handle(auth.PathPrefix()+"/", auth.Handler())
 mux.Handle("/api/", auth.RequireAccess(api))
 ```
 
+AuthMe 不会强制使用全局 logger。需要接入宿主应用的 `log/slog` 时，可通过 option 注入；
+普通无效凭据不会记录，认证后端或授权后端异常会记录：
+
+```go
+auth, err := authme.New(config,
+    authme.WithMethods(tokenMethod),
+    authme.WithLogger(slog.Default()),
+)
+```
+
 Session key 是 base64url 编码的 32 字节随机值，可使用以下命令生成：
 
 ```bash
@@ -111,6 +121,11 @@ openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 
 `Session.Keys` 是 key ring。第一把 key 用于写入，所有 key 都可解密；轮换时先将新 key
 插入首位，旧 Session 在旧 key 移除前继续有效。
+
+`origins` 支持配置多个域名，但同一个 AuthMe 实例中的 origin 必须统一使用 HTTP 或
+HTTPS。Cookie 的 `Secure`、OIDC flow cookie 和 CSRF Origin 校验是实例级策略；开发环境
+可使用 loopback HTTP，生产环境应使用 HTTPS。若需要同时访问本地和生产地址，建议为本地
+开发也配置 HTTPS，而不是混用两种协议。
 
 静态 token 是 opaque Bearer secret，不规定 namespace、版本、credential ID 或编码格式。
 只要是非空且不含空白/控制字符的字符串即可；配置直接保存 token，适合沿用 Redis ACL、
