@@ -1,4 +1,4 @@
-module github.com/lwmacct/260711-go-pkg-httpauth
+module github.com/lwmacct/260711-go-pkg-authme
 
 go 1.26.4
 

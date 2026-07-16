@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme"
 )
 
 type UsernameAuthorizer struct{ allowed map[string]struct{} }
@@ -28,12 +28,12 @@ func NewUsernameAuthorizer(values []string) (UsernameAuthorizer, error) {
 	return UsernameAuthorizer{allowed: allowed}, nil
 }
 
-func (a UsernameAuthorizer) Authorize(_ context.Context, authentication httpauth.Authentication) error {
+func (a UsernameAuthorizer) Authorize(_ context.Context, authentication authme.Authentication) error {
 	if authentication.Principal.Provider != "github" {
 		return nil
 	}
 	if _, ok := a.allowed[strings.ToLower(strings.TrimSpace(authentication.Principal.Username))]; !ok {
-		return httpauth.ErrForbidden
+		return authme.ErrForbidden
 	}
 	return nil
 }

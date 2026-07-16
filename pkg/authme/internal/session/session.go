@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/internal/model"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme/internal/model"
 )
 
 const maxCookieBytes = 3800
@@ -70,9 +70,9 @@ func New(config model.SessionConfig, secure bool, random io.Reader, now func() t
 	}
 	codec.cookieName = strings.TrimSpace(config.CookieName)
 	if codec.cookieName == "" {
-		codec.cookieName = "httpauth"
+		codec.cookieName = "authme"
 		if secure {
-			codec.cookieName = "__Host-httpauth"
+			codec.cookieName = "__Host-authme"
 		}
 	}
 	if strings.ContainsAny(codec.cookieName, "\x00\r\n\t ;,") {

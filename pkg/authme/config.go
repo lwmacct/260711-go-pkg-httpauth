@@ -1,4 +1,4 @@
-package httpauth
+package authme
 
 import (
 	"fmt"

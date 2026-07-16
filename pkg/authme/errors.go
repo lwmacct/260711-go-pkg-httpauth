@@ -1,4 +1,4 @@
-package httpauth
+package authme
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ErrInvalidConfig   = errors.New("invalid httpauth config")
+	ErrInvalidConfig   = errors.New("invalid authme config")
 	ErrUnauthenticated = errors.New("unauthenticated")
 	ErrForbidden       = errors.New("forbidden")
 	ErrInvalidSession  = errors.New("invalid session")

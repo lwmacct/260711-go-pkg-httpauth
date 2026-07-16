@@ -1,4 +1,4 @@
-package httpauth_test
+package authme_test
 
 import (
 	"encoding/base64"
@@ -7,21 +7,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/adapters/statictoken"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme/adapters/statictoken"
 )
 
 func Example() {
 	tokenMethod, _ := statictoken.New(statictoken.Config{Namespace: "myapp", Credentials: []statictoken.Credential{
 		{ID: "admin", Name: "Administrator", TokenSHA256: os.Getenv("AUTH_TOKEN_SHA256")},
 	}})
-	auth, _ := httpauth.New(httpauth.Config{
+	auth, _ := authme.New(authme.Config{
 		Origins: []string{"https://tool.example.com"},
-		Session: httpauth.SessionConfig{
+		Session: authme.SessionConfig{
 			TTL:  time.Hour,
-			Keys: []httpauth.SessionKey{{ID: "primary", Secret: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("k", 32)))}},
+			Keys: []authme.SessionKey{{ID: "primary", Secret: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("k", 32)))}},
 		},
-	}, httpauth.WithMethods(tokenMethod))
+	}, authme.WithMethods(tokenMethod))
 
 	mux := http.NewServeMux()
 	mux.Handle("/auth/", auth.Handler())

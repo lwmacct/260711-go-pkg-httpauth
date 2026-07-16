@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme"
 )
 
 func TestMapClaimsAndUsernameAuthorizer(t *testing.T) {
@@ -24,11 +24,11 @@ func TestMapClaimsAndUsernameAuthorizer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := authorizer.Authorize(context.Background(), httpauth.Authentication{Principal: principal}); err != nil {
+	if err := authorizer.Authorize(context.Background(), authme.Authentication{Principal: principal}); err != nil {
 		t.Fatalf("allowed principal was rejected: %v", err)
 	}
 	principal.Username = "visitor"
-	if err := authorizer.Authorize(context.Background(), httpauth.Authentication{Principal: principal}); !errors.Is(err, httpauth.ErrForbidden) {
+	if err := authorizer.Authorize(context.Background(), authme.Authentication{Principal: principal}); !errors.Is(err, authme.ErrForbidden) {
 		t.Fatalf("unexpected denied error: %v", err)
 	}
 }

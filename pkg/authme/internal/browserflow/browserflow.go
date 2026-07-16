@@ -134,7 +134,7 @@ func Token(random io.Reader) (string, error) {
 
 func CookieName(id string, secure bool) string {
 	digest := sha256.Sum256([]byte(id))
-	name := "httpauth_flow_" + base64.RawURLEncoding.EncodeToString(digest[:6])
+	name := "authme_flow_" + base64.RawURLEncoding.EncodeToString(digest[:6])
 	if secure {
 		return "__Host-" + name
 	}

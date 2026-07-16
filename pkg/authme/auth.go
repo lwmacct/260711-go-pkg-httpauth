@@ -1,4 +1,4 @@
-package httpauth
+package authme
 
 import (
 	"context"
@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/internal/model"
-	internalsession "github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/internal/session"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme/internal/model"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme/internal/session"
 )
 
 type Auth struct {
 	prefix         string
 	origins        trustedOrigins
-	codec          *internalsession.Codec
+	codec          *session.Codec
 	authorizer     Authorizer
 	methods        []Method
 	infos          []MethodInfo
@@ -30,10 +30,10 @@ func New(config Config, options ...Option) (*Auth, error) {
 	runtime := authOptions{}
 	for index, option := range options {
 		if option == nil {
-			return nil, fmt.Errorf("httpauth: option %d is nil", index)
+			return nil, fmt.Errorf("authme: option %d is nil", index)
 		}
 		if err := option.apply(&runtime); err != nil {
-			return nil, fmt.Errorf("httpauth: apply option %d: %w", index, err)
+			return nil, fmt.Errorf("authme: apply option %d: %w", index, err)
 		}
 	}
 	normalized, err := config.Normalize()
@@ -50,7 +50,7 @@ func New(config Config, options ...Option) (*Auth, error) {
 	if runtime.clock == nil {
 		runtime.clock = ClockFunc(time.Now)
 	}
-	codec, err := internalsession.New(normalized.Session, origins.Secure(), runtime.random, runtime.clock.Now)
+	codec, err := session.New(normalized.Session, origins.Secure(), runtime.random, runtime.clock.Now)
 	if err != nil {
 		return nil, err
 	}

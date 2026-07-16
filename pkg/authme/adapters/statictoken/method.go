@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme"
 )
 
 type Method struct {
@@ -78,11 +78,11 @@ func Digest(namespace, token string) (string, error) {
 	return digestToken(token), nil
 }
 
-func (m *Method) Info() httpauth.MethodInfo {
-	return httpauth.MethodInfo{ID: m.id, Flow: httpauth.LoginFlowSecret, Label: m.label}
+func (m *Method) Info() authme.MethodInfo {
+	return authme.MethodInfo{ID: m.id, Flow: authme.LoginFlowSecret, Label: m.label}
 }
 
-func (m *Method) LoginHandler(issuer httpauth.SessionIssuer) http.Handler {
+func (m *Method) LoginHandler(issuer authme.SessionIssuer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, MaxTokenBytes+256)
 		decoder := json.NewDecoder(r.Body)
@@ -91,38 +91,38 @@ func (m *Method) LoginHandler(issuer httpauth.SessionIssuer) http.Handler {
 			Token string `json:"token"`
 		}
 		if err := decoder.Decode(&request); err != nil {
-			httpauth.WriteError(w, http.StatusBadRequest, "invalid_request", "Invalid request")
+			authme.WriteError(w, http.StatusBadRequest, "invalid_request", "Invalid request")
 			return
 		}
 		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-			httpauth.WriteError(w, http.StatusBadRequest, "invalid_request", "Invalid request")
+			authme.WriteError(w, http.StatusBadRequest, "invalid_request", "Invalid request")
 			return
 		}
 		credential, ok := m.authenticate(request.Token)
 		if !ok {
-			httpauth.WriteError(w, http.StatusUnauthorized, "invalid_access_token", "Invalid access token")
+			authme.WriteError(w, http.StatusUnauthorized, "invalid_access_token", "Invalid access token")
 			return
 		}
 		if err := issuer.IssueSession(w, m.session(credential)); err != nil {
-			httpauth.WriteError(w, http.StatusInternalServerError, "login_unavailable", "Login unavailable")
+			authme.WriteError(w, http.StatusInternalServerError, "login_unavailable", "Login unavailable")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 }
 
-func (m *Method) AuthenticateBearer(_ context.Context, token string) (httpauth.Session, error) {
+func (m *Method) AuthenticateBearer(_ context.Context, token string) (authme.Session, error) {
 	credential, ok := m.authenticate(token)
 	if !ok {
-		return httpauth.Session{}, httpauth.ErrUnauthenticated
+		return authme.Session{}, authme.ErrUnauthenticated
 	}
 	return m.session(credential), nil
 }
 
-func (m *Method) ValidateSession(_ context.Context, session httpauth.Session) (httpauth.Principal, error) {
+func (m *Method) ValidateSession(_ context.Context, session authme.Session) (authme.Principal, error) {
 	credential, exists := m.credentials[session.CredentialID]
 	if !exists || subtle.ConstantTimeCompare([]byte(credential.revision), []byte(session.Revision)) != 1 {
-		return httpauth.Principal{}, httpauth.ErrUnauthenticated
+		return authme.Principal{}, authme.ErrUnauthenticated
 	}
 	return principal(credential), nil
 }
@@ -160,10 +160,10 @@ func digestToken(token string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func (m *Method) session(credential storedCredential) httpauth.Session {
-	return httpauth.Session{CredentialID: credential.id, Revision: credential.revision, Principal: principal(credential)}
+func (m *Method) session(credential storedCredential) authme.Session {
+	return authme.Session{CredentialID: credential.id, Revision: credential.revision, Principal: principal(credential)}
 }
 
-func principal(credential storedCredential) httpauth.Principal {
-	return httpauth.Principal{Subject: credential.id, Username: credential.id, Name: credential.name, Provider: "token"}
+func principal(credential storedCredential) authme.Principal {
+	return authme.Principal{Subject: credential.id, Username: credential.id, Name: credential.name, Provider: "token"}
 }

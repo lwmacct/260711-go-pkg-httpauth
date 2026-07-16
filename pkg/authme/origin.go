@@ -1,10 +1,10 @@
-package httpauth
+package authme
 
 import (
 	"fmt"
 	"net/http"
 
-	internalorigin "github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/internal/origin"
+	internalorigin "github.com/lwmacct/260711-go-pkg-authme/pkg/authme/internal/origin"
 )
 
 type trustedOrigins = internalorigin.Origins

@@ -1,11 +1,11 @@
-package httpauth
+package authme
 
 import (
 	"context"
 	"net/http"
 	"net/url"
 
-	"github.com/lwmacct/260711-go-pkg-httpauth/pkg/httpauth/internal/model"
+	"github.com/lwmacct/260711-go-pkg-authme/pkg/authme/internal/model"
 )
 
 type LoginFlow = model.LoginFlow
